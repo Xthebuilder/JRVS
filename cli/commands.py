@@ -69,10 +69,29 @@ class CommandHandler:
                 theme.clear_screen()
                 theme.print_banner()
                 
+            elif command == "calendar":
+                await self.cli.show_calendar()
+
+            elif command == "event":
+                if len(command_args) >= 2:
+                    await self.cli.add_event(command_args)
+                else:
+                    theme.print_error("Usage: /event <date> <time> <title>")
+                    theme.print_info("Example: /event 2025-11-10 14:30 Team meeting")
+
+            elif command == "today":
+                await self.cli.show_today_events()
+
+            elif command == "complete":
+                if command_args and command_args[0].isdigit():
+                    await self.cli.complete_event(int(command_args[0]))
+                else:
+                    theme.print_error("Usage: /complete <event_id>")
+
             elif command in ["exit", "quit", "bye"]:
                 if theme.confirm("Are you sure you want to exit?"):
                     self.cli.running = False
-                    
+
             else:
                 theme.print_error(f"Unknown command: /{command}")
                 theme.print_info("Type '/help' for available commands")

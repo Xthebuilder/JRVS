@@ -11,6 +11,7 @@ from llm.ollama_client import ollama_client
 from rag.retriever import rag_retriever
 from scraper.web_scraper import web_scraper
 from core.database import db
+from core.calendar import calendar
 
 class JarvisCLI:
     def __init__(self):
@@ -26,6 +27,7 @@ class JarvisCLI:
         try:
             # Initialize components
             await db.initialize()
+            await calendar.initialize()
             await rag_retriever.initialize()
             
             # Discover available models
@@ -86,6 +88,10 @@ class JarvisCLI:
     async def handle_chat_message(self, message: str):
         """Handle regular chat messages"""
         try:
+            # Check for natural language calendar requests
+            if await self._try_parse_calendar_request(message):
+                return
+
             # Show thinking indicator
             with theme.show_progress("Thinking...") as progress:
                 task = progress.add_task("", total=None)
@@ -270,6 +276,105 @@ class JarvisCLI:
         """Set CLI theme"""
         theme.set_theme(theme_name)
 
+    async def show_calendar(self):
+        """Show upcoming events"""
+        events = await calendar.get_upcoming_events(days=7)
+        if events:
+            theme.print_status("Upcoming Events (Next 7 Days):", "info")
+            from datetime import datetime
+            for event in events:
+                event_dt = datetime.fromisoformat(event['event_date'])
+                theme.console.print(f"[{theme.get_color('accent')}]#{event['id']}[/] {event['title']}")
+                theme.console.print(f"  Date: {event_dt.strftime('%Y-%m-%d %H:%M')}")
+                if event['description']:
+                    theme.console.print(f"  {event['description']}")
+                theme.print_separator(length=30)
+        else:
+            theme.print_warning("No upcoming events")
+
+    async def show_today_events(self):
+        """Show today's events"""
+        events = await calendar.get_today_events()
+        if events:
+            theme.print_status("Today's Events:", "info")
+            from datetime import datetime
+            for event in events:
+                event_dt = datetime.fromisoformat(event['event_date'])
+                theme.console.print(f"[{theme.get_color('accent')}]#{event['id']}[/] {event['title']}")
+                theme.console.print(f"  Time: {event_dt.strftime('%H:%M')}")
+                if event['description']:
+                    theme.console.print(f"  {event['description']}")
+                theme.print_separator(length=30)
+        else:
+            theme.print_info("No events today")
+
+    async def add_event(self, args: List[str]):
+        """Add a calendar event"""
+        try:
+            from datetime import datetime
+            # Parse: /event 2025-11-10 14:30 Team meeting
+            date_str = args[0]
+            time_str = args[1]
+            title = " ".join(args[2:])
+
+            event_dt = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
+            event_id = await calendar.add_event(title, event_dt)
+            theme.print_success(f"Event #{event_id} added: {title} on {event_dt.strftime('%Y-%m-%d %H:%M')}")
+        except Exception as e:
+            theme.print_error(f"Failed to add event: {e}")
+
+    async def complete_event(self, event_id: int):
+        """Mark event as completed"""
+        try:
+            await calendar.mark_completed(event_id)
+            theme.print_success(f"Event #{event_id} marked as completed")
+        except Exception as e:
+            theme.print_error(f"Failed to complete event: {e}")
+
+    async def _try_parse_calendar_request(self, message: str) -> bool:
+        """Try to parse natural language calendar requests"""
+        import re
+        from datetime import datetime, timedelta
+
+        msg_lower = message.lower()
+
+        # Pattern: "meeting/event/reminder tomorrow/today at X"
+        if any(word in msg_lower for word in ['meeting', 'event', 'reminder', 'appointment']):
+            time_match = re.search(r'at (\d{1,2})(?::(\d{2}))?\s*(am|pm)?', msg_lower)
+
+            if time_match:
+                hour = int(time_match.group(1))
+                minute = int(time_match.group(2)) if time_match.group(2) else 0
+                meridiem = time_match.group(3)
+
+                # Convert to 24-hour format
+                if meridiem == 'pm' and hour != 12:
+                    hour += 12
+                elif meridiem == 'am' and hour == 12:
+                    hour = 0
+
+                # Determine date
+                if 'tomorrow' in msg_lower:
+                    event_date = datetime.now() + timedelta(days=1)
+                elif 'today' in msg_lower:
+                    event_date = datetime.now()
+                else:
+                    event_date = datetime.now()
+
+                # Set time
+                event_date = event_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
+
+                # Extract title (simplified)
+                title = message.split('at')[0].strip()
+                if not title or len(title) < 3:
+                    title = "Meeting"
+
+                event_id = await calendar.add_event(title, event_date)
+                theme.print_success(f"✓ Event added: {title} on {event_date.strftime('%Y-%m-%d %H:%M')}")
+                return True
+
+        return False
+
     def show_help(self):
         """Show help information"""
         commands = {
@@ -278,13 +383,17 @@ class JarvisCLI:
             "/switch <model>": "Switch to a different model",
             "/scrape <url>": "Scrape a website and add to knowledge base",
             "/search <query>": "Search stored documents",
+            "/calendar": "Show upcoming events (7 days)",
+            "/today": "Show today's events",
+            "/event <date> <time> <title>": "Add calendar event",
+            "/complete <id>": "Mark event as completed",
             "/stats": "Show system statistics",
             "/history": "Show conversation history",
             "/theme <name>": "Change CLI theme (matrix, cyberpunk, minimal)",
             "/clear": "Clear the screen",
             "/exit": "Exit Jarvis"
         }
-        
+
         theme.print_help(commands)
 
 # CLI instance

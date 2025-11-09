@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  jarvis:
+    build: .
+    container_name: jarvis_ai_agent
+    stdin_open: true
+    tty: true
+    volumes:
+      - ./data:/app/data
+    network_mode: "host"
+    environment:
+      - OLLAMA_BASE_URL=http://localhost:11434
+    depends_on:
+      - ollama
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+
+volumes:
+  ollama_data:

@@ -17,7 +17,7 @@ VECTOR_INDEX_PATH = DATA_DIR / "faiss_index"
 
 # Ollama settings
 OLLAMA_BASE_URL = "http://localhost:11434"
-DEFAULT_MODEL = "gemma3:12b"
+DEFAULT_MODEL = "gemma3:4b"
 
 # Timeout settings (in seconds)
 TIMEOUTS = {
