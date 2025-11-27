@@ -266,6 +266,111 @@ context = await rag_retriever.retrieve_context(query)
 response = await ollama_client.generate(query, context=context)
 ```
 
+## 🐳 Docker Setup
+
+JRVS can be run entirely in Docker containers for easy deployment and isolation.
+
+### Prerequisites
+
+- **Docker** - [Install Docker](https://docs.docker.com/get-docker/)
+- **Docker Compose** - Usually included with Docker Desktop
+
+### Quick Start with Docker
+
+1. **Clone the repository**:
+```bash
+git clone https://github.com/Xthebuilder/JRVS.git
+cd JRVS
+```
+
+2. **Start all services**:
+```bash
+docker-compose up -d
+```
+
+This will start:
+- **JRVS API** on `http://localhost:8000`
+- **JRVS Frontend** on `http://localhost:3000`
+- **Ollama** on `http://localhost:11434`
+
+3. **Pull an Ollama model** (required for first use):
+```bash
+docker exec -it ollama ollama pull llama3.1
+```
+
+4. **Access the application**:
+- Web UI: `http://localhost:3000`
+- API: `http://localhost:8000`
+- API Docs: `http://localhost:8000/docs`
+
+### Docker Commands
+
+| Command | Description |
+|---------|-------------|
+| `docker-compose up -d` | Start all services in background |
+| `docker-compose up` | Start with logs visible |
+| `docker-compose down` | Stop all services |
+| `docker-compose logs -f` | View logs from all services |
+| `docker-compose logs jrvs-api` | View API logs only |
+| `docker-compose build` | Rebuild images after code changes |
+| `docker-compose build --no-cache` | Force rebuild without cache |
+
+### Running the CLI Mode
+
+To run JRVS in interactive CLI mode:
+
+```bash
+docker-compose --profile cli run --rm jrvs-cli
+```
+
+### Building Individual Images
+
+**Build the Python backend image:**
+```bash
+docker build -t jrvs-api .
+```
+
+**Build the Next.js frontend image:**
+```bash
+docker build -f Dockerfile.frontend -t jrvs-frontend .
+```
+
+### Environment Variables
+
+Configure JRVS using environment variables in `docker-compose.yml`:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OLLAMA_BASE_URL` | `http://ollama:11434` | URL of the Ollama API server |
+| `OLLAMA_DEFAULT_MODEL` | `llama3.1` | Default model to use |
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | API URL for frontend |
+
+### Data Persistence
+
+Data is persisted using Docker volumes:
+- `./data` - JRVS database and FAISS index (mounted from host)
+- `ollama_data` - Ollama models (Docker named volume)
+
+### Docker Network
+
+All services communicate via the `jrvs-network` bridge network. Internal service names:
+- `jrvs-api` - Python backend
+- `jrvs-frontend` - Next.js frontend
+- `ollama` - Ollama LLM server
+
+### Stopping and Cleaning Up
+
+```bash
+# Stop all containers
+docker-compose down
+
+# Stop and remove volumes (warning: deletes Ollama models)
+docker-compose down -v
+
+# Remove all JRVS images
+docker rmi jrvs-api jrvs-frontend
+```
+
 ## 🐛 Troubleshooting
 
 ### Common Issues
@@ -287,6 +392,23 @@ response = await ollama_client.generate(query, context=context)
 - Reduce `MAX_CONTEXT_LENGTH` in config.py
 - Use smaller models (e.g., `llama3.1:8b` instead of `llama3.1:70b`)
 - Clear vector cache: delete `data/faiss_index.*` files
+
+### Docker Issues
+
+**"Cannot connect to Ollama" in Docker**
+- Make sure the Ollama container is running: `docker ps | grep ollama`
+- Check Ollama logs: `docker-compose logs ollama`
+- Verify the model is pulled: `docker exec -it ollama ollama list`
+
+**Container fails to start**
+- Check logs: `docker-compose logs <service-name>`
+- Rebuild images: `docker-compose build --no-cache`
+- Check port conflicts: `docker ps` or `netstat -tlnp`
+
+**Frontend can't reach API**
+- Ensure API container is running: `docker ps | grep jrvs-api`
+- Check network connectivity: `docker network ls` (find the jrvs network)
+- Verify API health: `curl http://localhost:8000/health`
 
 ## 🤝 Contributing
 

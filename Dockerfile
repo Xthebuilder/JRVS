@@ -6,6 +6,7 @@ WORKDIR /app
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     curl \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
@@ -22,6 +23,11 @@ RUN mkdir -p /app/data
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
+ENV OLLAMA_BASE_URL=http://ollama:11434
 
-# Run the application
-CMD ["python", "main.py"]
+# Expose API port
+EXPOSE 8000
+
+# Default command (can be overridden in docker-compose)
+# Use "api" mode for web/API access, "cli" for interactive CLI
+CMD ["python", "api/server.py"]
