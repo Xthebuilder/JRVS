@@ -16,8 +16,8 @@ DATABASE_PATH = DATA_DIR / "jarvis.db"
 VECTOR_INDEX_PATH = DATA_DIR / "faiss_index"
 
 # Ollama settings
-OLLAMA_BASE_URL = "http://localhost:11434"
-DEFAULT_MODEL = "deepseek-r1:14b"
+OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+DEFAULT_MODEL = os.environ.get("OLLAMA_DEFAULT_MODEL", "deepseek-r1:14b")
 
 # Timeout settings (in seconds)
 TIMEOUTS = {

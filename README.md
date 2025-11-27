@@ -164,6 +164,20 @@ JRVS can now act as an **MCP Client**, connecting to MCP servers to access exter
 
 ## 🛠️ Configuration
 
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | URL of the Ollama API server |
+| `OLLAMA_DEFAULT_MODEL` | `deepseek-r1:14b` | Default model to use |
+
+Example for connecting to a remote Ollama instance:
+```bash
+export OLLAMA_BASE_URL="http://192.168.1.100:11434"
+export OLLAMA_DEFAULT_MODEL="llama3:8b"
+python main.py
+```
+
 ### Command Line Options
 
 ```bash
