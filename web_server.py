@@ -9,6 +9,7 @@ This ensures JRVS is private and only accessible to your devices.
 import asyncio
 import json
 import uuid
+from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Optional, List, Dict
 from pathlib import Path
@@ -32,15 +33,6 @@ from data_analysis.analyzer import data_analyzer
 from mcp.coding_agent import jarcore
 
 
-app = FastAPI(title="JRVS AI Agent", description="Intelligent AI assistant on your Tailscale network")
-
-# Mount static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
-# Store active WebSocket connections
-active_connections: List[WebSocket] = []
-
-
 def get_tailscale_ip() -> str:
     """Get the Tailscale IP address"""
     try:
@@ -56,9 +48,10 @@ def get_tailscale_ip() -> str:
         return "0.0.0.0"  # Fallback to all interfaces
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Initialize JRVS components on startup"""
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup and shutdown events"""
+    # Startup
     print("🤖 Initializing JRVS components...")
 
     await db.initialize()
@@ -76,17 +69,30 @@ async def startup_event():
         print(f"✓ Connected to {len(servers)} MCP server(s): {', '.join(servers)}")
 
     print("✓ JRVS ready!")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup on shutdown"""
+    
+    yield
+    
+    # Shutdown
     print("🧹 Cleaning up JRVS...")
     await ollama_client.cleanup()
     await web_scraper.cleanup()
     await rag_retriever.cleanup()
     await mcp_client.cleanup()
     print("✓ Goodbye!")
+
+
+# Create app with lifespan
+app = FastAPI(
+    title="JRVS AI Agent", 
+    description="Intelligent AI assistant on your Tailscale network",
+    lifespan=lifespan
+)
+
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Store active WebSocket connections
+active_connections: List[WebSocket] = []
 
 
 async def handle_command(websocket: WebSocket, command: str, session_id: str):
