@@ -1,19 +1,64 @@
-version: '3.8'
-
 services:
-  jarvis:
-    build: .
-    container_name: jarvis_ai_agent
+  # JRVS Python Backend (API Server)
+  jrvs-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jrvs-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./static:/app/static
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_DEFAULT_MODEL=llama3.1
+    depends_on:
+      ollama:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - jrvs-network
+
+  # JRVS Next.js Frontend
+  jrvs-frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: jrvs-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - jrvs-api
+    restart: unless-stopped
+    networks:
+      - jrvs-network
+
+  # JRVS CLI (Interactive mode)
+  jrvs-cli:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jrvs-cli
     stdin_open: true
     tty: true
     volumes:
       - ./data:/app/data
-    network_mode: "host"
     environment:
-      - OLLAMA_BASE_URL=http://localhost:11434
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_DEFAULT_MODEL=llama3.1
     depends_on:
-      - ollama
+      ollama:
+        condition: service_started
+    command: ["python", "main.py"]
+    networks:
+      - jrvs-network
+    profiles:
+      - cli
 
+  # Ollama LLM Server
   ollama:
     image: ollama/ollama:latest
     container_name: ollama
@@ -22,6 +67,12 @@ services:
     volumes:
       - ollama_data:/root/.ollama
     restart: unless-stopped
+    networks:
+      - jrvs-network
+
+networks:
+  jrvs-network:
+    driver: bridge
 
 volumes:
   ollama_data:

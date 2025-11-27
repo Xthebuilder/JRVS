@@ -1,3 +1,4 @@
+# Python
 __pycache__
 *.pyc
 *.pyo
@@ -8,12 +9,50 @@ __pycache__
 *.egg-info
 dist
 build
-.git
-.gitignore
-.dockerignore
-*.md
-data/faiss_index
-data/*.db
 .venv
 venv
 ENV
+.env
+.env.*
+
+# Git
+.git
+.gitignore
+.dockerignore
+
+# Documentation (not needed in container)
+*.md
+!README.md
+docs
+
+# Data files (mounted as volumes)
+data/faiss_index
+data/*.db
+
+# Node.js
+node_modules
+.next
+out
+.npm
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Testing
+.pytest_cache
+coverage
+.coverage
+htmlcov
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Claude config (not needed in container)
+.claude
