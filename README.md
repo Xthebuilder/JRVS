@@ -407,7 +407,7 @@ docker rmi jrvs-api jrvs-frontend
 
 **Frontend can't reach API**
 - Ensure API container is running: `docker ps | grep jrvs-api`
-- Check network connectivity: `docker network inspect jrvs_jrvs-network`
+- Check network connectivity: `docker network ls` (find the jrvs network)
 - Verify API health: `curl http://localhost:8000/health`
 
 ## 🤝 Contributing
