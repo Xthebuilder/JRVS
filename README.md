@@ -342,9 +342,10 @@ Configure JRVS using environment variables in `docker-compose.yml`:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `OLLAMA_BASE_URL` | `http://ollama:11434` | URL of the Ollama API server |
-| `OLLAMA_DEFAULT_MODEL` | `llama3.1` | Default model to use |
+| `OLLAMA_DEFAULT_MODEL` | `deepseek-r1:14b` | Default model to use (see note below) |
 | `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | API URL for frontend |
 
+> **Note:** The default model is `deepseek-r1:14b` as set in the Python backend. If you are using Docker, the `OLLAMA_DEFAULT_MODEL` environment variable may be set to `llama3.1` in `docker-compose.yml`, overriding this default. Check your deployment configuration to confirm which model is used by default.
 ### Data Persistence
 
 Data is persisted using Docker volumes:
