@@ -295,7 +295,7 @@ This will start:
 
 3. **Pull an Ollama model** (required for first use):
 ```bash
-docker exec -it ollama ollama pull llama3.1
+docker exec -it ollama ollama pull deepseek-r1:14b
 ```
 
 4. **Access the application**:
