@@ -214,8 +214,8 @@ class Database:
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute("""
                 DELETE FROM conversations 
-                WHERE created_at < datetime('now', '-{} days')
-            """.format(days))
+                WHERE created_at < datetime('now', '-' || ? || ' days')
+            """, (days,))
             
             await db.commit()
 

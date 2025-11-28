@@ -221,7 +221,6 @@ class JarvisCLI:
             theme.print_warning("\nShutdown signal received...")
             self.running = False
             # Force exit if needed
-            import sys
             sys.exit(0)
 
     async def cleanup(self):

@@ -1,4 +1,5 @@
 """FastAPI server for Jarvis AI Agent"""
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -18,7 +19,20 @@ from core.database import db
 from core.calendar import calendar
 from scraper.web_scraper import web_scraper
 
-app = FastAPI(title="Jarvis AI API", version="1.0.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup and shutdown events"""
+    # Startup
+    await db.initialize()
+    await calendar.initialize()
+    await rag_retriever.initialize()
+    await ollama_client.discover_models()
+    yield
+    # Shutdown (cleanup if needed)
+
+
+app = FastAPI(title="Jarvis AI API", version="1.0.0", lifespan=lifespan)
 
 # CORS for frontend
 app.add_middleware(
@@ -49,14 +63,6 @@ class EventRequest(BaseModel):
 
 class ScrapeRequest(BaseModel):
     url: str
-
-# Startup
-@app.on_event("startup")
-async def startup():
-    await db.initialize()
-    await calendar.initialize()
-    await rag_retriever.initialize()
-    await ollama_client.discover_models()
 
 # Health check
 @app.get("/health")

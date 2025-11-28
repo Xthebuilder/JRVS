@@ -1,5 +1,23 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+ENV/
+env/
+
 # dependencies
 /node_modules
 /.pnp
