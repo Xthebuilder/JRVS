@@ -19,10 +19,26 @@ A sophisticated AI assistant that combines Ollama LLMs with RAG (Retrieval-Augme
 
 ### Prerequisites
 
-1. **Python 3.8+** 
+1. **Python 3.8+** - [Download Python](https://python.org/downloads/)
 2. **Ollama** - [Install Ollama](https://ollama.ai)
+3. **Node.js** (optional, for MCP servers and web UI) - [Download Node.js](https://nodejs.org/)
 
-### Installation
+### Automated Setup (Recommended)
+
+Use the platform-specific setup scripts to automatically install dependencies:
+
+#### Windows
+```cmd
+setup_windows.bat
+```
+
+#### macOS
+```bash
+chmod +x setup_mac.sh
+./setup_mac.sh
+```
+
+### Manual Installation
 
 1. **Clone or download the project**:
 ```bash
@@ -50,6 +66,151 @@ ollama pull mistral
 ```bash
 python main.py
 ```
+
+---
+
+## 🖥️ Platform-Specific Setup
+
+### Windows Setup
+
+#### Prerequisites
+
+1. **Python 3.8+**
+   - Download from [python.org](https://python.org/downloads/)
+   - **Important**: Check "Add Python to PATH" during installation
+   - Verify installation: `python --version`
+
+2. **Ollama**
+   - Download from [ollama.ai/download](https://ollama.ai/download)
+   - Run the installer and follow the prompts
+   - Verify installation: `ollama --version`
+
+3. **Node.js** (optional, for MCP and web UI)
+   - Download from [nodejs.org](https://nodejs.org/)
+   - Choose the LTS version
+   - Verify installation: `node --version`
+
+4. **Git** (optional, for cloning)
+   - Download from [git-scm.com](https://git-scm.com/download/win)
+
+#### Quick Setup
+
+Run the automated setup script:
+```cmd
+setup_windows.bat
+```
+
+Or manually:
+```cmd
+pip install -r requirements.txt
+ollama serve
+ollama pull llama3.1
+python main.py
+```
+
+#### Windows-Specific Tips
+
+- **PowerShell vs Command Prompt**: Both work, but PowerShell offers better features
+- **Virtual Environment** (recommended):
+  ```cmd
+  python -m venv venv
+  venv\Scripts\activate
+  pip install -r requirements.txt
+  ```
+- **Firewall**: Allow Ollama through Windows Firewall if prompted
+- **Long Path Names**: Enable long paths in Windows if you encounter path length issues:
+  ```cmd
+  reg add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f
+  ```
+
+---
+
+### macOS Setup
+
+#### Prerequisites
+
+1. **Homebrew** (recommended)
+   ```bash
+   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+   ```
+
+2. **Python 3.8+**
+   - macOS comes with Python, but you may need a newer version:
+   ```bash
+   brew install python@3.11
+   ```
+   - Verify: `python3 --version`
+
+3. **Ollama**
+   ```bash
+   brew install ollama
+   ```
+   - Or download from [ollama.ai/download](https://ollama.ai/download)
+
+4. **Node.js** (optional, for MCP and web UI)
+   ```bash
+   brew install node
+   ```
+
+#### Quick Setup
+
+Run the automated setup script:
+```bash
+chmod +x setup_mac.sh
+./setup_mac.sh
+```
+
+Or manually:
+```bash
+pip3 install -r requirements.txt
+ollama serve
+ollama pull llama3.1
+python3 main.py
+```
+
+#### macOS-Specific Tips
+
+- **Apple Silicon (M1/M2/M3)**: All dependencies are compatible with ARM architecture
+- **Virtual Environment** (recommended):
+  ```bash
+  python3 -m venv venv
+  source venv/bin/activate
+  pip install -r requirements.txt
+  ```
+- **Permissions**: If you see "permission denied" errors:
+  ```bash
+  chmod +x start_jrvs.sh start-api.sh setup_mac.sh
+  ```
+- **Gatekeeper**: If macOS blocks Ollama, go to System Preferences > Security & Privacy and allow it
+- **Memory**: For larger models (70B+), ensure you have sufficient RAM (32GB+ recommended)
+
+---
+
+## 📋 Dependency Reference
+
+### Python Dependencies
+
+| Package | Purpose |
+|---------|---------|
+| `rich` | Beautiful terminal UI |
+| `requests` | HTTP client |
+| `beautifulsoup4` | Web scraping |
+| `faiss-cpu` | Vector search |
+| `sentence-transformers` | Text embeddings |
+| `torch` | PyTorch for ML |
+| `fastapi` | API server |
+| `uvicorn` | ASGI server |
+
+### System Dependencies
+
+| Tool | Required | Purpose |
+|------|----------|---------|
+| Python 3.8+ | Yes | Runtime |
+| Ollama | Yes | Local AI models |
+| Node.js | Optional | MCP servers, web UI |
+| npm | Optional | Package management |
+
+---
 
 ## 🎯 Usage
 
@@ -287,6 +448,99 @@ response = await ollama_client.generate(query, context=context)
 - Reduce `MAX_CONTEXT_LENGTH` in config.py
 - Use smaller models (e.g., `llama3.1:8b` instead of `llama3.1:70b`)
 - Clear vector cache: delete `data/faiss_index.*` files
+
+---
+
+### Windows-Specific Issues
+
+**"python is not recognized"**
+- Python is not in PATH
+- Reinstall Python and check "Add Python to PATH"
+- Or use the full path: `C:\Python311\python.exe`
+
+**"pip is not recognized"**
+- Try: `python -m pip install -r requirements.txt`
+
+**Permission denied errors**
+- Run Command Prompt as Administrator
+- Or use a virtual environment
+
+**torch installation fails**
+- Install Visual C++ Build Tools from [Microsoft](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
+- Try: `pip install torch --index-url https://download.pytorch.org/whl/cpu`
+
+**FAISS installation issues**
+- Try: `pip install faiss-cpu --no-cache-dir`
+- Ensure you have a 64-bit Python installation
+
+---
+
+### macOS-Specific Issues
+
+**"command not found: python"**
+- Use `python3` instead of `python`
+- Or create an alias: `alias python=python3`
+
+**"zsh: permission denied"**
+- Make script executable: `chmod +x script_name.sh`
+
+**SSL certificate errors**
+- Install certificates: 
+  ```bash
+  /Applications/Python\ 3.11/Install\ Certificates.command
+  ```
+
+**Apple Silicon (M1/M2/M3) issues**
+- Ensure you're using ARM-native Python (not Rosetta)
+- Check architecture: `python3 -c "import platform; print(platform.machine())"`
+- Should output `arm64`
+
+**Homebrew not found after install (Apple Silicon)**
+- Add to your shell profile (~/.zshrc):
+  ```bash
+  eval "$(/opt/homebrew/bin/brew shellenv)"
+  ```
+- Then: `source ~/.zshrc`
+
+**Memory errors with large models**
+- Close other applications to free RAM
+- Use smaller models: `ollama pull llama3.1:8b`
+- Check available memory: `top` or Activity Monitor
+
+---
+
+### MCP Server Issues
+
+**"npx: command not found"**
+- Install Node.js from [nodejs.org](https://nodejs.org/)
+- Verify: `node --version` and `npm --version`
+
+**MCP servers not connecting**
+- Check `mcp/client_config.json` configuration
+- Ensure paths are correct for your OS
+- Windows paths use backslashes or forward slashes: `"C:/Users/name/folder"`
+
+---
+
+### Virtual Environment Tips
+
+Using a virtual environment is recommended to avoid dependency conflicts:
+
+**Windows:**
+```cmd
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+**macOS/Linux:**
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+To deactivate: `deactivate`
 
 ## 🤝 Contributing
 
