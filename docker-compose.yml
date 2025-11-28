@@ -32,6 +32,7 @@ services:
       # NEXT_PUBLIC_API_URL is used by the browser (client-side), not the container
       # So localhost:8000 is correct - users access API via the exposed port
       - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - API_URL=http://jrvs-api:8000  # Server-side (SSR/container)
     depends_on:
       - jrvs-api
     restart: unless-stopped
