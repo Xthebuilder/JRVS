@@ -1,9 +1,10 @@
 """FastAPI server for Jarvis AI Agent"""
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 import asyncio
 import uuid
 from datetime import datetime
@@ -334,6 +335,415 @@ async def get_history(session_id: str, limit: int = 10):
 async def get_stats():
     stats = await rag_retriever.get_stats()
     return stats
+
+
+# ============================================================================
+# UTCP (Universal Tool Calling Protocol) Endpoint
+# ============================================================================
+# UTCP provides a standardized way for AI agents to discover and call tools
+# directly without requiring wrapper servers. This endpoint returns a UTCP
+# manual that describes all JRVS API endpoints as callable tools.
+#
+# Learn more: https://github.com/universal-tool-calling-protocol
+# ============================================================================
+
+def get_utcp_manual(request: Request) -> Dict[str, Any]:
+    """Generate UTCP manual for JRVS API tools"""
+    base_url = str(request.base_url).rstrip("/")
+
+    return {
+        "manual_version": "1.0.0",
+        "utcp_version": "1.0.1",
+        "info": {
+            "title": "JRVS AI Agent API",
+            "version": "1.0.0",
+            "description": "A sophisticated AI assistant combining Ollama LLMs with RAG capabilities, featuring web scraping, vector search, calendar management, and intelligent context injection.",
+            "contact": {
+                "url": "https://github.com/universal-tool-calling-protocol"
+            }
+        },
+        "tools": [
+            # Chat Tools
+            {
+                "name": "chat",
+                "description": "Send a message to the JRVS AI assistant and get a response with RAG-enhanced context. Supports natural language calendar event creation.",
+                "tags": ["chat", "ai", "conversation"],
+                "inputs": {
+                    "type": "object",
+                    "properties": {
+                        "message": {
+                            "type": "string",
+                            "description": "The message or question to send to the AI assistant"
+                        },
+                        "session_id": {
+                            "type": "string",
+                            "description": "Optional session ID for conversation continuity"
+                        },
+                        "stream": {
+                            "type": "boolean",
+                            "description": "Whether to stream the response (currently not supported via this endpoint)",
+                            "default": False
+                        }
+                    },
+                    "required": ["message"]
+                },
+                "outputs": {
+                    "type": "object",
+                    "properties": {
+                        "response": {"type": "string", "description": "The AI-generated response"},
+                        "session_id": {"type": "string", "description": "Session ID for this conversation"},
+                        "model_used": {"type": "string", "description": "The Ollama model used for generation"},
+                        "context_used": {"type": "string", "description": "Preview of RAG context used"}
+                    }
+                },
+                "tool_call_template": {
+                    "call_template_type": "http",
+                    "url": f"{base_url}/api/chat",
+                    "http_method": "POST",
+                    "headers": {"Content-Type": "application/json"}
+                }
+            },
+            # Model Management Tools
+            {
+                "name": "list_models",
+                "description": "List all available Ollama AI models and identify the currently active model.",
+                "tags": ["models", "ollama", "configuration"],
+                "inputs": {"type": "object", "properties": {}},
+                "outputs": {
+                    "type": "object",
+                    "properties": {
+                        "models": {"type": "array", "description": "List of available models with metadata"},
+                        "current": {"type": "string", "description": "Currently active model name"}
+                    }
+                },
+                "tool_call_template": {
+                    "call_template_type": "http",
+                    "url": f"{base_url}/api/models",
+                    "http_method": "GET"
+                }
+            },
+            {
+                "name": "switch_model",
+                "description": "Switch JRVS to use a different Ollama AI model for text generation.",
+                "tags": ["models", "ollama", "configuration"],
+                "inputs": {
+                    "type": "object",
+                    "properties": {
+                        "model_name": {
+                            "type": "string",
+                            "description": "Name of the Ollama model to switch to (e.g., 'llama3.1', 'codellama', 'mistral')"
+                        }
+                    },
+                    "required": ["model_name"]
+                },
+                "outputs": {
+                    "type": "object",
+                    "properties": {
+                        "success": {"type": "boolean"},
+                        "model": {"type": "string", "description": "The newly active model name"}
+                    }
+                },
+                "tool_call_template": {
+                    "call_template_type": "http",
+                    "url": f"{base_url}/api/models/switch/{{model_name}}",
+                    "http_method": "POST"
+                }
+            },
+            # Calendar Tools
+            {
+                "name": "get_calendar_events",
+                "description": "Retrieve upcoming calendar events for a specified number of days.",
+                "tags": ["calendar", "events", "schedule"],
+                "inputs": {
+                    "type": "object",
+                    "properties": {
+                        "days": {
+                            "type": "integer",
+                            "description": "Number of days ahead to retrieve events (default: 7)",
+                            "default": 7
+                        }
+                    }
+                },
+                "outputs": {
+                    "type": "object",
+                    "properties": {
+                        "events": {"type": "array", "description": "List of upcoming events"}
+                    }
+                },
+                "tool_call_template": {
+                    "call_template_type": "http",
+                    "url": f"{base_url}/api/calendar/events",
+                    "http_method": "GET",
+                    "query_params": {"days": "${{days}}"}
+                }
+            },
+            {
+                "name": "get_today_events",
+                "description": "Get all calendar events scheduled for today.",
+                "tags": ["calendar", "events", "today"],
+                "inputs": {"type": "object", "properties": {}},
+                "outputs": {
+                    "type": "object",
+                    "properties": {
+                        "events": {"type": "array", "description": "List of today's events"}
+                    }
+                },
+                "tool_call_template": {
+                    "call_template_type": "http",
+                    "url": f"{base_url}/api/calendar/today",
+                    "http_method": "GET"
+                }
+            },
+            {
+                "name": "create_calendar_event",
+                "description": "Create a new calendar event with optional reminder.",
+                "tags": ["calendar", "events", "create"],
+                "inputs": {
+                    "type": "object",
+                    "properties": {
+                        "title": {
+                            "type": "string",
+                            "description": "Event title"
+                        },
+                        "event_date": {
+                            "type": "string",
+                            "description": "Event date/time in ISO format (e.g., '2025-11-15T14:30:00')"
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": "Optional event description",
+                            "default": ""
+                        },
+                        "reminder_minutes": {
+                            "type": "integer",
+                            "description": "Minutes before event to send reminder (0 = no reminder)",
+                            "default": 0
+                        }
+                    },
+                    "required": ["title", "event_date"]
+                },
+                "outputs": {
+                    "type": "object",
+                    "properties": {
+                        "event_id": {"type": "integer", "description": "ID of the created event"},
+                        "success": {"type": "boolean"}
+                    }
+                },
+                "tool_call_template": {
+                    "call_template_type": "http",
+                    "url": f"{base_url}/api/calendar/events",
+                    "http_method": "POST",
+                    "headers": {"Content-Type": "application/json"}
+                }
+            },
+            {
+                "name": "delete_calendar_event",
+                "description": "Delete a calendar event by its ID.",
+                "tags": ["calendar", "events", "delete"],
+                "inputs": {
+                    "type": "object",
+                    "properties": {
+                        "event_id": {
+                            "type": "integer",
+                            "description": "ID of the event to delete"
+                        }
+                    },
+                    "required": ["event_id"]
+                },
+                "outputs": {
+                    "type": "object",
+                    "properties": {
+                        "success": {"type": "boolean"}
+                    }
+                },
+                "tool_call_template": {
+                    "call_template_type": "http",
+                    "url": f"{base_url}/api/calendar/events/{{event_id}}",
+                    "http_method": "DELETE"
+                }
+            },
+            {
+                "name": "complete_calendar_event",
+                "description": "Mark a calendar event as completed.",
+                "tags": ["calendar", "events", "complete"],
+                "inputs": {
+                    "type": "object",
+                    "properties": {
+                        "event_id": {
+                            "type": "integer",
+                            "description": "ID of the event to mark as completed"
+                        }
+                    },
+                    "required": ["event_id"]
+                },
+                "outputs": {
+                    "type": "object",
+                    "properties": {
+                        "success": {"type": "boolean"}
+                    }
+                },
+                "tool_call_template": {
+                    "call_template_type": "http",
+                    "url": f"{base_url}/api/calendar/events/{{event_id}}/complete",
+                    "http_method": "POST"
+                }
+            },
+            # Knowledge Base & RAG Tools
+            {
+                "name": "scrape_url",
+                "description": "Scrape a website URL and add its content to the JRVS knowledge base for RAG retrieval.",
+                "tags": ["scraping", "knowledge-base", "rag"],
+                "inputs": {
+                    "type": "object",
+                    "properties": {
+                        "url": {
+                            "type": "string",
+                            "description": "The URL to scrape and index"
+                        }
+                    },
+                    "required": ["url"]
+                },
+                "outputs": {
+                    "type": "object",
+                    "properties": {
+                        "success": {"type": "boolean"},
+                        "document_id": {"type": "integer", "description": "ID of the indexed document"}
+                    }
+                },
+                "tool_call_template": {
+                    "call_template_type": "http",
+                    "url": f"{base_url}/api/scrape",
+                    "http_method": "POST",
+                    "headers": {"Content-Type": "application/json"}
+                }
+            },
+            {
+                "name": "search_documents",
+                "description": "Search the JRVS knowledge base using semantic vector search.",
+                "tags": ["search", "knowledge-base", "rag"],
+                "inputs": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "Search query text"
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "Maximum number of results to return",
+                            "default": 5
+                        }
+                    },
+                    "required": ["query"]
+                },
+                "outputs": {
+                    "type": "object",
+                    "properties": {
+                        "results": {"type": "array", "description": "List of matching documents with similarity scores"}
+                    }
+                },
+                "tool_call_template": {
+                    "call_template_type": "http",
+                    "url": f"{base_url}/api/search",
+                    "http_method": "GET",
+                    "query_params": {
+                        "query": "${{query}}",
+                        "limit": "${{limit}}"
+                    }
+                }
+            },
+            # Conversation History Tool
+            {
+                "name": "get_conversation_history",
+                "description": "Retrieve conversation history for a specific session.",
+                "tags": ["history", "conversation", "session"],
+                "inputs": {
+                    "type": "object",
+                    "properties": {
+                        "session_id": {
+                            "type": "string",
+                            "description": "Session ID to retrieve history for"
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "Maximum number of conversations to return",
+                            "default": 10
+                        }
+                    },
+                    "required": ["session_id"]
+                },
+                "outputs": {
+                    "type": "object",
+                    "properties": {
+                        "history": {"type": "array", "description": "List of past conversations"}
+                    }
+                },
+                "tool_call_template": {
+                    "call_template_type": "http",
+                    "url": f"{base_url}/api/history/{{session_id}}",
+                    "http_method": "GET",
+                    "query_params": {"limit": "${{limit}}"}
+                }
+            },
+            # System Tools
+            {
+                "name": "get_stats",
+                "description": "Get JRVS system statistics including RAG pipeline metrics, vector store size, and embedding cache info.",
+                "tags": ["system", "stats", "monitoring"],
+                "inputs": {"type": "object", "properties": {}},
+                "outputs": {
+                    "type": "object",
+                    "properties": {
+                        "vector_store": {"type": "object", "description": "Vector store statistics"},
+                        "embedding_cache": {"type": "object", "description": "Embedding cache statistics"}
+                    }
+                },
+                "tool_call_template": {
+                    "call_template_type": "http",
+                    "url": f"{base_url}/api/stats",
+                    "http_method": "GET"
+                }
+            },
+            {
+                "name": "health_check",
+                "description": "Check if the JRVS API is healthy and get the current active model.",
+                "tags": ["system", "health", "status"],
+                "inputs": {"type": "object", "properties": {}},
+                "outputs": {
+                    "type": "object",
+                    "properties": {
+                        "status": {"type": "string", "description": "Health status ('healthy' or 'unhealthy')"},
+                        "model": {"type": "string", "description": "Currently active Ollama model"}
+                    }
+                },
+                "tool_call_template": {
+                    "call_template_type": "http",
+                    "url": f"{base_url}/health",
+                    "http_method": "GET"
+                }
+            }
+        ]
+    }
+
+
+@app.get("/utcp")
+async def utcp_manual(request: Request):
+    """
+    UTCP Discovery Endpoint - Universal Tool Calling Protocol
+    
+    Returns a UTCP manual describing all JRVS API tools that can be called
+    directly by AI agents without requiring wrapper servers.
+    
+    UTCP is a modern, flexible, and scalable standard for tool calling that:
+    - Allows direct tool calls (no middleman proxy)
+    - Supports multiple protocols (HTTP, CLI, WebSocket, etc.)
+    - Uses native authentication and security
+    - Provides zero latency overhead
+    
+    Learn more: https://github.com/universal-tool-calling-protocol
+    """
+    return JSONResponse(content=get_utcp_manual(request))
+
 
 if __name__ == "__main__":
     import uvicorn

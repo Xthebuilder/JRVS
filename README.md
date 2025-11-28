@@ -8,6 +8,7 @@ A sophisticated AI assistant that combines Ollama LLMs with RAG (Retrieval-Augme
 - **🔄 Dynamic Model Switching**: Hot-swap between different Ollama models
 - **🌐 Web Scraping**: Automatically scrape and index web content with BeautifulSoup
 - **🔌 MCP Integration**: Both MCP **Server** (be a tool for others) AND **Client** (use external tools)
+- **🌍 UTCP Support**: Universal Tool Calling Protocol for direct AI agent tool access
 - **📅 Smart Calendar**: ASCII calendar view with natural language event creation
 - **🎨 Beautiful CLI**: Customizable themes (Matrix, Cyberpunk, Minimal) with Rich terminal UI
 - **💾 Persistent Memory**: Conversation history and document storage in SQLite
@@ -322,6 +323,46 @@ JRVS can now act as an **MCP Client**, connecting to MCP servers to access exter
 - And many more! See `MCP_CLIENT_GUIDE.md`
 
 📖 **Full guide**: See [MCP_CLIENT_GUIDE.md](MCP_CLIENT_GUIDE.md)
+
+## 🌍 UTCP Support (Universal Tool Calling Protocol)
+
+JRVS now supports **UTCP** - a modern, lightweight protocol that allows AI agents to discover and call tools directly without wrapper servers.
+
+### What is UTCP?
+
+UTCP provides a standardized way for AI agents to call your tools directly using their native protocols (HTTP, WebSocket, CLI). Unlike MCP which requires wrapper servers, UTCP acts as a "manual" that describes how to call existing APIs.
+
+### Quick Start
+
+1. **Start the API server**:
+```bash
+python api/server.py
+```
+
+2. **Discover tools via UTCP**:
+```bash
+curl http://localhost:8000/utcp
+```
+
+3. **Call tools directly** using the information from the manual:
+```bash
+curl -X POST http://localhost:8000/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Hello JRVS!"}'
+```
+
+### UTCP vs MCP
+
+| Aspect | UTCP | MCP |
+|--------|------|-----|
+| **Architecture** | Direct API calls | Wrapper servers |
+| **Performance** | Zero overhead | Proxy latency |
+| **Infrastructure** | None required | Servers needed |
+| **Best for** | REST APIs | Stdio tools, complex workflows |
+
+📖 **Full guide**: See [docs/UTCP_GUIDE.md](docs/UTCP_GUIDE.md)
+
+🔗 **Learn more**: [UTCP Specification](https://github.com/universal-tool-calling-protocol)
 
 ## 🛠️ Configuration
 
