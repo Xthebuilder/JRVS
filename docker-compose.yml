@@ -9,7 +9,7 @@ services:
       - "8000:8000"
     volumes:
       - ./data:/app/data
-      - ./static:/app/static
+      - ./static:/app/static:ro
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
       - OLLAMA_DEFAULT_MODEL=llama3.1
