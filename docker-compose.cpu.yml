@@ -1,0 +1,15 @@
+# Docker Compose override for CPU-only systems (no GPU)
+# Use with: docker-compose -f docker-compose.yml -f docker-compose.cpu.yml up -d
+#
+# System Requirements:
+# - Minimum 8GB RAM recommended for Ollama
+# - Adjust memory limit below based on your system's available RAM
+# - For systems with 16GB+ RAM, you can increase the limit for better performance
+
+services:
+  ollama:
+    # Override the ollama service to remove GPU requirements
+    deploy:
+      resources:
+        limits:
+          memory: 8G  # Adjust based on available RAM (minimum 4G, recommended 8G+)

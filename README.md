@@ -274,6 +274,7 @@ JRVS can be run entirely in Docker containers for easy deployment and isolation.
 
 - **Docker** - [Install Docker](https://docs.docker.com/get-docker/)
 - **Docker Compose** - Usually included with Docker Desktop
+- **NVIDIA GPU** (optional) - For GPU acceleration with Ollama
 
 ### Quick Start with Docker
 
@@ -284,8 +285,15 @@ cd JRVS
 ```
 
 2. **Start all services**:
+
+**With GPU support (recommended if you have NVIDIA GPU):**
 ```bash
 docker-compose up -d
+```
+
+**CPU-only mode (for systems without GPU):**
+```bash
+docker-compose -f docker-compose.yml -f docker-compose.cpu.yml up -d
 ```
 
 This will start:
@@ -295,7 +303,7 @@ This will start:
 
 3. **Pull an Ollama model** (required for first use):
 ```bash
-docker exec -it ollama ollama pull deepseek-r1:14b
+docker exec -it ollama ollama pull llama3.1
 ```
 
 4. **Access the application**:
@@ -346,11 +354,21 @@ Configure JRVS using environment variables in `docker-compose.yml`:
 | `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | API URL for frontend |
 
 > **Note:** The default model is `deepseek-r1:14b` as set in the Python backend. If you are using Docker, the `OLLAMA_DEFAULT_MODEL` environment variable may be set to `llama3.1` in `docker-compose.yml`, overriding this default. Check your deployment configuration to confirm which model is used by default.
+
 ### Data Persistence
 
 Data is persisted using Docker volumes:
 - `./data` - JRVS database and FAISS index (mounted from host)
+- `./mcp` - MCP configuration files (mounted from host)
 - `ollama_data` - Ollama models (Docker named volume)
+
+### Health Checks
+
+The JRVS API service includes health checks. You can verify health with:
+```bash
+docker-compose ps
+curl http://localhost:8000/health
+```
 
 ### Docker Network
 

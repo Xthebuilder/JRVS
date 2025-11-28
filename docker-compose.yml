@@ -10,6 +10,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./static:/app/static:ro
+      - ./mcp:/app/mcp
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
       - OLLAMA_DEFAULT_MODEL=llama3.1
@@ -17,6 +18,12 @@ services:
       ollama:
         condition: service_started
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     networks:
       - jrvs-network
 
@@ -34,7 +41,8 @@ services:
       - NEXT_PUBLIC_API_URL=http://localhost:8000
       - API_URL=http://jrvs-api:8000  # Server-side (SSR/container)
     depends_on:
-      - jrvs-api
+      jrvs-api:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - jrvs-network
@@ -49,6 +57,7 @@ services:
     tty: true
     volumes:
       - ./data:/app/data
+      - ./mcp:/app/mcp
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
       - OLLAMA_DEFAULT_MODEL=llama3.1
@@ -70,6 +79,13 @@ services:
     volumes:
       - ollama_data:/root/.ollama
     restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     networks:
       - jrvs-network
 
