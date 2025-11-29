@@ -350,6 +350,14 @@ class OllamaClient:
         
         return model_list
 
+    async def set_base_url(self, base_url: str):
+        """Update the base URL and reset session"""
+        self.base_url = base_url.rstrip('/')
+        # Close existing session if it exists
+        if self.session and not self.session.closed:
+            await self.session.close()
+        self.session = None
+
     async def cleanup(self):
         """Clean up resources"""
         if self.session and not self.session.closed:
