@@ -8,7 +8,7 @@ This allows JRVS to be an MCP client, connecting to MCP servers like:
 - Custom MCP servers
 
 Usage:
-    from mcp.client import mcp_client
+    from mcp_gateway.client import mcp_client
 
     # Initialize and connect to servers
     await mcp_client.initialize()
@@ -49,7 +49,7 @@ class MCPServerConfig:
 class MCPClient:
     """MCP Client for connecting to multiple MCP servers"""
 
-    def __init__(self, config_path: str = "mcp/client_config.json"):
+    def __init__(self, config_path: str = "mcp_gateway/client_config.json"):
         self.config_path = Path(config_path)
         self.servers: Dict[str, MCPServerConfig] = {}
         self.sessions: Dict[str, ClientSession] = {}

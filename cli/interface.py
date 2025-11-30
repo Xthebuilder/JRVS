@@ -12,8 +12,8 @@ from rag.retriever import rag_retriever
 from scraper.web_scraper import web_scraper
 from core.database import db
 from core.calendar import calendar
-from mcp.client import mcp_client
-from mcp.agent import mcp_agent
+from mcp_gateway.client import mcp_client
+from mcp_gateway.agent import mcp_agent
 
 class JarvisCLI:
     def __init__(self):
@@ -40,7 +40,7 @@ class JarvisCLI:
                 if servers:
                     theme.print_success(f"Connected to {len(servers)} MCP server(s): {', '.join(servers)}")
                 else:
-                    theme.print_warning("No MCP servers connected (check mcp/client_config.json)")
+                    theme.print_warning("No MCP servers connected (check mcp_gateway/client_config.json)")
 
             # Discover available models
             models = await ollama_client.discover_models()
@@ -419,7 +419,7 @@ class JarvisCLI:
                 theme.console.print(f"  • {server} ({len(tools)} tools)")
         else:
             theme.print_warning("No MCP servers connected")
-            theme.print_info("Configure servers in mcp/client_config.json")
+            theme.print_info("Configure servers in mcp_gateway/client_config.json")
 
     async def list_mcp_tools(self, server_name: str = None):
         """List MCP tools"""
@@ -606,7 +606,7 @@ class JarvisCLI:
         theme.console.print("  /mcp-servers        - List connected servers")
         theme.console.print("  /mcp-tools          - List all tools")
         theme.console.print("  /report             - View tool usage report")
-        theme.console.print("  Configure: mcp/client_config.json")
+        theme.console.print("  Configure: mcp_gateway/client_config.json")
 
 # CLI instance
 cli = JarvisCLI()

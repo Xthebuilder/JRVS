@@ -53,7 +53,7 @@ JARCORE (JARVIS Autonomous Reasoning & Coding Engine) brings professional coding
 
 ```
 JRVS/
-├── mcp/
+├── mcp_gateway/
 │   ├── server.py           # MCP server with coding tools
 │   ├── jarcore.py     # Core JARCORE implementation
 │   └── agent.py            # Intelligent tool orchestration
@@ -267,7 +267,7 @@ Add to your MCP client settings:
   "mcpServers": {
     "jrvs": {
       "command": "python3",
-      "args": ["/home/xmanz/JRVS/mcp/server.py"],
+      "args": ["/home/xmanz/JRVS/mcp_gateway/server.py"],
       "env": {}
     }
   }
@@ -284,7 +284,7 @@ Then in your MCP client:
 ### Python API
 
 ```python
-from mcp.jarcore import jarcore
+from mcp_gateway.coding_agent import jarcore
 
 # Generate code
 result = await jarcore.generate_code(

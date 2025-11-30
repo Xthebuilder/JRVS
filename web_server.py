@@ -26,11 +26,11 @@ from llm.ollama_client import ollama_client
 from rag.retriever import rag_retriever
 from core.database import db
 from core.calendar import calendar
-from mcp.client import mcp_client
-from mcp.agent import mcp_agent
+from mcp_gateway.client import mcp_client
+from mcp_gateway.agent import mcp_agent
 from scraper.web_scraper import web_scraper
 from data_analysis.analyzer import data_analyzer
-from mcp.coding_agent import jarcore
+from mcp_gateway.coding_agent import jarcore
 
 
 def get_tailscale_ip() -> str:

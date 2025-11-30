@@ -20,7 +20,7 @@ JRVS can now **use external tools** by connecting to MCP servers! This is a game
 - 💬 Send Slack messages (via slack server)
 
 **Quick Start:**
-1. Edit `mcp/client_config.json` to add servers
+1. Edit `mcp_gateway/client_config.json` to add servers
 2. Start JRVS - it auto-connects
 3. Use `/mcp-servers` and `/mcp-tools` to explore
 4. Call tools with `/mcp-call <server> <tool> <json_args>`

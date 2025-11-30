@@ -127,7 +127,7 @@ explain async programming in python
 data/jarvis.db         - Main database
 data/mcp_logs/         - Tool usage logs
 data/embeddings/       - RAG vector store
-mcp/client_config.json - MCP server configuration
+mcp_gateway/client_config.json - MCP server configuration
 ```
 
 ---
@@ -136,14 +136,14 @@ mcp/client_config.json - MCP server configuration
 
 ### Enable Brave Web Search
 1. Get API key from https://brave.com/search/api/
-2. Edit `mcp/client_config.json`
+2. Edit `mcp_gateway/client_config.json`
 3. Add your key to `"BRAVE_API_KEY": ""`
 4. Restart JRVS
 
 See full guide: `BRAVE_SEARCH_SETUP.md`
 
 ### Add More MCP Servers
-Edit `mcp/client_config.json` to add:
+Edit `mcp_gateway/client_config.json` to add:
 - **github** - GitHub API (issues, PRs, repos)
 - **postgres** - Database access
 - **slack** - Send messages
@@ -215,7 +215,7 @@ ollama serve
 ### MCP server won't connect
 - Check Node.js: `node --version`
 - Install server: `npx -y @modelcontextprotocol/server-NAME`
-- Check config: `mcp/client_config.json`
+- Check config: `mcp_gateway/client_config.json`
 
 ### Python errors
 ```bash

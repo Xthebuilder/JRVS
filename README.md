@@ -286,7 +286,7 @@ JRVS can now act as an **MCP Client**, connecting to MCP servers to access exter
 
 ### Quick Setup
 
-1. **Configure servers** in `mcp/client_config.json`:
+1. **Configure servers** in `mcp_gateway/client_config.json`:
 ```json
 {
   "mcpServers": {
@@ -401,10 +401,10 @@ JRVS now includes a full-featured MCP server for Claude Code integration:
 
 ```bash
 # Run MCP server
-python mcp/server.py
+python mcp_gateway/server.py
 
 # Test components
-python mcp/test_server.py
+python mcp_gateway/test_server.py
 ```
 
 **17 tools available**: RAG search, web scraping, calendar, model switching, and more!
@@ -516,7 +516,7 @@ response = await ollama_client.generate(query, context=context)
 - Verify: `node --version` and `npm --version`
 
 **MCP servers not connecting**
-- Check `mcp/client_config.json` configuration
+- Check `mcp_gateway/client_config.json` configuration
 - Ensure paths are correct for your OS
 - Windows paths use backslashes or forward slashes: `"C:/Users/name/folder"`
 

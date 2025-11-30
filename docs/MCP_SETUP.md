@@ -35,7 +35,7 @@ This will install the `mcp>=1.2.0` package along with other JRVS dependencies.
 Test that the MCP server starts correctly:
 
 ```bash
-python mcp/server.py
+python mcp_gateway/server.py
 ```
 
 You should see output like:
@@ -58,7 +58,7 @@ Press Ctrl+C to stop the server.
 ```bash
 # For Claude Desktop/Code
 mkdir -p ~/.config/claude
-cp /home/xmanz/JRVS/mcp/claude_config.json ~/.config/claude/mcp_servers.json
+cp /home/xmanz/JRVS/mcp_gateway/claude_config.json ~/.config/claude/mcp_servers.json
 ```
 
 2. Edit `~/.config/claude/mcp_servers.json` to adjust paths if needed:
@@ -69,7 +69,7 @@ cp /home/xmanz/JRVS/mcp/claude_config.json ~/.config/claude/mcp_servers.json
     "jrvs": {
       "command": "python",
       "args": [
-        "/home/xmanz/JRVS/mcp/server.py"
+        "/home/xmanz/JRVS/mcp_gateway/server.py"
       ],
       "env": {
         "PYTHONPATH": "/home/xmanz/JRVS"
@@ -89,7 +89,7 @@ Add this to your Claude Code MCP configuration:
     "jrvs": {
       "command": "python",
       "args": [
-        "/home/xmanz/JRVS/mcp/server.py"
+        "/home/xmanz/JRVS/mcp_gateway/server.py"
       ],
       "env": {
         "PYTHONPATH": "/home/xmanz/JRVS"
@@ -117,7 +117,7 @@ Then update your config to use `uv`:
       "command": "uv",
       "args": [
         "run",
-        "mcp/server.py"
+        "mcp_gateway/server.py"
       ]
     }
   }
@@ -199,7 +199,7 @@ Claude Code uses: generate_with_ollama(prompt="Explain machine learning", contex
 You can test the MCP server using the MCP inspector:
 
 ```bash
-npx @modelcontextprotocol/inspector python mcp/server.py
+npx @modelcontextprotocol/inspector python mcp_gateway/server.py
 ```
 
 This will open a web interface to interact with your MCP server and test all tools.
@@ -227,12 +227,12 @@ This will open a web interface to interact with your MCP server and test all too
 
 ### "MCP server not showing in Claude Code"
 - Check Claude Code MCP configuration file location
-- Verify the path to `mcp/server.py` is correct
+- Verify the path to `mcp_gateway/server.py` is correct
 - Check logs in Claude Code settings
 - Restart Claude Code
 
 ### "Permission denied"
-- Make the server executable: `chmod +x mcp/server.py`
+- Make the server executable: `chmod +x mcp_gateway/server.py`
 - Check Python is in your PATH: `which python`
 
 ## Advanced Configuration
@@ -246,7 +246,7 @@ You can customize JRVS MCP behavior via environment variables:
   "mcpServers": {
     "jrvs": {
       "command": "python",
-      "args": ["/home/xmanz/JRVS/mcp/server.py"],
+      "args": ["/home/xmanz/JRVS/mcp_gateway/server.py"],
       "env": {
         "PYTHONPATH": "/home/xmanz/JRVS",
         "OLLAMA_BASE_URL": "http://localhost:11434",
@@ -272,7 +272,7 @@ Claude Code (MCP Client)
     ↓
     MCP Protocol (stdio/JSON-RPC)
     ↓
-JRVS MCP Server (mcp/server.py)
+JRVS MCP Server (mcp_gateway/server.py)
     ↓
     ├─→ RAG System (rag/)
     │   ├─→ Vector Store (FAISS)

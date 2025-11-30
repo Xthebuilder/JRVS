@@ -34,7 +34,7 @@ from rag.retriever import rag_retriever
 from core.database import db
 from core.calendar import calendar
 from scraper.web_scraper import web_scraper
-from mcp.coding_agent import jarcore
+from mcp_gateway.coding_agent import jarcore
 from config import OLLAMA_BASE_URL, DEFAULT_MODEL
 
 # Initialize MCP server

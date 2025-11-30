@@ -305,3 +305,9 @@ The integration enables Claude Code to leverage JRVS's RAG capabilities, turning
 **Implementation Complete!** 🎉
 
 JRVS is now a fully-functional MCP server ready to enhance Claude Code with persistent knowledge, semantic search, and intelligent context injection.
+
+---
+
+## Update: Namespace Change
+
+**Note**: The `mcp/` directory referenced in this document was renamed to `mcp_gateway/` to resolve a namespace collision with the pip-installed `mcp` package. All file paths and imports in the codebase now use `mcp_gateway/` instead of `mcp/`. This change does not affect functionality - it only resolves the import conflict that prevented the official MCP SDK from being imported correctly.

@@ -14,7 +14,7 @@ Claude Code can now directly:
 
 ## Installation (Already Done!)
 
-✅ MCP server created at `mcp/server.py`
+✅ MCP server created at `mcp_gateway/server.py`
 ✅ 17 tools + 2 resources implemented
 ✅ Dependencies added to requirements.txt
 ✅ Test suite passed (4/4 components working)
@@ -25,10 +25,10 @@ Claude Code can now directly:
 
 ```bash
 # Test components
-python mcp/test_server.py
+python mcp_gateway/test_server.py
 
 # Run server (will wait for stdio connection)
-python mcp/server.py
+python mcp_gateway/server.py
 ```
 
 ### Option 2: Connect to Claude Code
@@ -40,7 +40,7 @@ python mcp/server.py
   "mcpServers": {
     "jrvs": {
       "command": "python",
-      "args": ["/home/xmanz/JRVS/mcp/server.py"],
+      "args": ["/home/xmanz/JRVS/mcp_gateway/server.py"],
       "env": {
         "PYTHONPATH": "/home/xmanz/JRVS"
       }
@@ -128,12 +128,12 @@ All systems ready!
 ## Files Created
 
 ```
-mcp/
+mcp_gateway/
 ├── __init__.py           # Package init
 ├── server.py             # MCP server (17 tools)
 ├── test_server.py        # Component tests
 ├── claude_config.json    # Example config
-└── README.md             # MCP directory docs
+└── README.md             # MCP gateway directory docs
 
 MCP_SETUP.md              # Complete setup guide (this file)
 MCP_QUICKSTART.md         # Quick reference
@@ -159,7 +159,7 @@ python main.py  # Run JRVS once to initialize
 ## Documentation
 
 - **Full Guide**: See `MCP_SETUP.md`
-- **MCP Dir**: See `mcp/README.md`
+- **MCP Gateway Dir**: See `mcp_gateway/README.md`
 - **JRVS Docs**: See `README.md`
 - **Official MCP**: https://modelcontextprotocol.io
 

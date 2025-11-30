@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 async def test_coding_agent():
     """Test the coding agent functionality"""
     try:
-        from mcp.coding_agent import coding_agent
+        from mcp_gateway.coding_agent import coding_agent
         print("✓ Coding agent imported successfully")
 
         # Test code generation

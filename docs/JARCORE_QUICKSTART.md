@@ -65,7 +65,7 @@ Add to your MCP client configuration:
   "mcpServers": {
     "jrvs": {
       "command": "python3",
-      "args": ["/home/xmanz/JRVS/mcp/server.py"]
+      "args": ["/home/xmanz/JRVS/mcp_gateway/server.py"]
     }
   }
 }
@@ -82,7 +82,7 @@ Then in your MCP client:
 
 ```python
 import asyncio
-from mcp.coding_agent import jarcore
+from mcp_gateway.coding_agent import jarcore
 
 async def main():
     # Generate code

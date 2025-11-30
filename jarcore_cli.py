@@ -20,7 +20,7 @@ import json
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from mcp.coding_agent import jarcore
+from mcp_gateway.coding_agent import jarcore
 from rich.console import Console
 from rich.syntax import Syntax
 from rich.panel import Panel

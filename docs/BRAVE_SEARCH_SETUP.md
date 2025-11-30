@@ -23,7 +23,7 @@ This guide will help you enable web search capabilities in JRVS using the Brave 
 
 ### 2. Add API Key to JRVS
 
-1. **Open** `mcp/client_config.json`
+1. **Open** `mcp_gateway/client_config.json`
 
 2. **Find** the brave-search config in `_disabled_servers`:
 ```json
@@ -163,7 +163,7 @@ The built-in web scraper can handle most needs:
 ## Security Notes
 
 - **Keep your API key private** - Don't share it or commit to Git
-- API key is stored locally in `mcp/client_config.json`
+- API key is stored locally in `mcp_gateway/client_config.json`
 - Consider using environment variables for production use
 - Brave doesn't track or log your searches (privacy-focused)
 

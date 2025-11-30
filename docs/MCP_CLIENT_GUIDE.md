@@ -16,7 +16,7 @@ Instead of just *being* a tool for others, JRVS can now *use* tools from:
 
 ### 1. Configure MCP Servers
 
-Edit `mcp/client_config.json` to add servers you want to connect to:
+Edit `mcp_gateway/client_config.json` to add servers you want to connect to:
 
 ```json
 {
@@ -195,7 +195,7 @@ You can build custom MCP servers for JRVS! See:
 - https://modelcontextprotocol.io/
 - https://github.com/modelcontextprotocol/servers
 
-Then add it to `mcp/client_config.json`:
+Then add it to `mcp_gateway/client_config.json`:
 
 ```json
 {
@@ -210,4 +210,4 @@ Then add it to `mcp/client_config.json`:
 
 - MCP Specification: https://modelcontextprotocol.io/
 - Official Servers: https://github.com/modelcontextprotocol/servers
-- JRVS MCP Server (for others to use JRVS): `mcp/server.py`
+- JRVS MCP Server (for others to use JRVS): `mcp_gateway/server.py`

@@ -137,7 +137,7 @@ END OF REPORT
 By default, the intelligent agent is **always active**. It analyzes every message to determine if tools are needed.
 
 If you want to **disable** automatic tool usage:
-1. Open `mcp/agent.py`
+1. Open `mcp_gateway/agent.py`
 2. Set `AGENT_ENABLED = False` at the top
 3. Restart JRVS
 
@@ -209,7 +209,7 @@ data/mcp_logs/
 
 ## Advanced: Customizing Tool Selection
 
-Edit `mcp/agent.py` to customize how JRVS selects tools:
+Edit `mcp_gateway/agent.py` to customize how JRVS selects tools:
 
 ```python
 # Example: Always use memory for certain keywords

@@ -6,7 +6,7 @@ This script demonstrates connecting to MCP servers and calling tools.
 """
 
 import asyncio
-from mcp.client import mcp_client
+from mcp_gateway.client import mcp_client
 
 async def main():
     print("🔌 Testing JRVS MCP Client\n")
