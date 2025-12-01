@@ -46,13 +46,97 @@ class MCPServerConfig:
     env: Optional[Dict[str, str]] = None
 
 
+class MCPConnection:
+    """
+    Connection manager for MCP server connections.
+
+    This class wraps both the stdio transport and ClientSession contexts,
+    ensuring they remain in scope and are properly cleaned up. This resolves
+    the task affinity issues with anyio TaskGroups by keeping contexts
+    entered/exited in the same task.
+
+    Usage:
+        async with MCPConnection(server_params) as connection:
+            session = connection.session
+            # Use session...
+    """
+
+    def __init__(self, server_params: StdioServerParameters):
+        self.server_params = server_params
+        self.stdio_ctx = None
+        self.read = None
+        self.write = None
+        self.session = None
+        self._entered = False
+
+    async def __aenter__(self):
+        """Enter both stdio and session contexts"""
+        if self._entered:
+            return self
+
+        try:
+            # Enter stdio context
+            self.stdio_ctx = stdio_client(self.server_params)
+            self.read, self.write = await self.stdio_ctx.__aenter__()
+
+            # Create and enter session context
+            self.session = ClientSession(self.read, self.write)
+            await self.session.__aenter__()
+
+            # Initialize the session
+            await self.session.initialize()
+
+            self._entered = True
+            return self
+        except Exception:
+            # On any error, use __aexit__ to clean up whatever was entered
+            # This ensures cleanup happens in the same task and reduces code duplication
+            await self.__aexit__(None, None, None)
+            raise
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """
+        Exit both session and stdio contexts in reverse order.
+
+        This method handles both normal cleanup and partial cleanup on errors.
+        It checks what was actually entered (by checking if contexts exist) rather
+        than relying solely on _entered flag, allowing it to clean up partial states.
+        """
+        # Exit session context first (if it was entered)
+        if self.session:
+            try:
+                await self.session.__aexit__(exc_type, exc_val, exc_tb)
+            except (Exception, asyncio.CancelledError):
+                # Ignore errors during cleanup to ensure stdio context is also cleaned up
+                # CancelledError can occur during shutdown when tasks are being cancelled
+                pass
+            self.session = None
+
+        # Then exit stdio context (if it was entered)
+        if self.stdio_ctx:
+            try:
+                await self.stdio_ctx.__aexit__(exc_type, exc_val, exc_tb)
+            except (Exception, asyncio.CancelledError):
+                # Ignore errors during cleanup
+                # CancelledError can occur during shutdown when the cancel scope is cancelled
+                pass
+            self.stdio_ctx = None
+
+        # Reset all state
+        self.read = None
+        self.write = None
+        self._entered = False
+
+
 class MCPClient:
     """MCP Client for connecting to multiple MCP servers"""
 
     def __init__(self, config_path: str = "mcp_gateway/client_config.json"):
         self.config_path = Path(config_path)
         self.servers: Dict[str, MCPServerConfig] = {}
-        self.sessions: Dict[str, ClientSession] = {}
+        # Store connection managers - these keep contexts in scope
+        # Each connection is entered when created and exited when disconnected
+        self.connections: Dict[str, MCPConnection] = {}
         self.tools_cache: Dict[str, List[Dict]] = {}  # server_name -> tools
         self.initialized = False
 
@@ -126,27 +210,29 @@ class MCPClient:
         print(f"Created default MCP client config at: {self.config_path}")
 
     async def _connect_server(self, name: str, config: MCPServerConfig):
-        """Connect to an MCP server"""
+        """
+        Connect to an MCP server using the connection manager pattern.
+
+        The connection manager keeps async contexts in scope, ensuring they are
+        entered and exited in the same task, which resolves task affinity issues
+        with anyio TaskGroups.
+        """
         server_params = StdioServerParameters(
             command=config.command,
             args=config.args,
             env=config.env
         )
 
-        # Create session
-        read, write = await stdio_client(server_params)
-        session = ClientSession(read, write)
+        # Create connection manager and enter it
+        # This keeps both stdio and session contexts in scope
+        connection = MCPConnection(server_params)
+        await connection.__aenter__()
 
-        await session.__aenter__()
-
-        # Initialize session
-        await session.initialize()
-
-        # Store session
-        self.sessions[name] = session
+        # Store the connection (it stays entered until disconnect)
+        self.connections[name] = connection
 
         # List and cache tools
-        tools_result = await session.list_tools()
+        tools_result = await connection.session.list_tools()
         self.tools_cache[name] = [
             {
                 "name": tool.name,
@@ -160,7 +246,7 @@ class MCPClient:
 
     async def list_servers(self) -> List[str]:
         """List all connected MCP servers"""
-        return list(self.sessions.keys())
+        return list(self.connections.keys())
 
     async def list_server_tools(self, server_name: str) -> List[Dict[str, Any]]:
         """List tools available from a specific server"""
@@ -172,12 +258,14 @@ class MCPClient:
 
     async def call_tool(self, server_name: str, tool_name: str, arguments: Dict[str, Any]) -> Any:
         """Call a tool on a specific MCP server"""
-        if server_name not in self.sessions:
+        if server_name not in self.connections:
             raise ValueError(f"Server '{server_name}' not connected")
 
-        session = self.sessions[server_name]
-        result = await session.call_tool(tool_name, arguments)
+        connection = self.connections[server_name]
+        if not connection._entered:
+            raise RuntimeError(f"Connection to '{server_name}' is not active")
 
+        result = await connection.session.call_tool(tool_name, arguments)
         return result
 
     async def search_tools(self, query: str) -> List[Dict[str, Any]]:
@@ -199,20 +287,36 @@ class MCPClient:
         return results
 
     async def disconnect_server(self, server_name: str):
-        """Disconnect from a specific MCP server"""
-        if server_name in self.sessions:
-            session = self.sessions[server_name]
-            await session.__aexit__(None, None, None)
-            del self.sessions[server_name]
+        """
+        Disconnect from a specific MCP server.
+
+        Exits the connection's async contexts, ensuring cleanup happens in the
+        same task that created them, which maintains task affinity.
+        """
+        if server_name in self.connections:
+            connection = self.connections[server_name]
+            # Exit the connection (this exits both session and stdio contexts)
+            # Note: exceptions are handled by cleanup() caller, but we still
+            # remove the connection to prevent it from being cleaned up again
+            try:
+                await connection.__aexit__(None, None, None)
+            finally:
+                # Always remove connection even if __aexit__ raised
+                del self.connections[server_name]
+
+        if server_name in self.tools_cache:
             del self.tools_cache[server_name]
 
     async def cleanup(self):
         """Disconnect from all MCP servers"""
-        for server_name in list(self.sessions.keys()):
+        for server_name in list(self.connections.keys()):
             try:
                 await self.disconnect_server(server_name)
-            except Exception as e:
-                print(f"Error disconnecting from {server_name}: {e}")
+            except (Exception, asyncio.CancelledError) as e:
+                # CancelledError can occur during shutdown when tasks are being cancelled
+                # This is expected and should be handled gracefully
+                if not isinstance(e, asyncio.CancelledError):
+                    print(f"Error disconnecting from {server_name}: {e}")
 
         self.initialized = False
 
