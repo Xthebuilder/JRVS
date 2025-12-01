@@ -200,9 +200,13 @@ async def main():
         theme.print_info("Start Ollama: ollama serve")
         sys.exit(1)
     
+    # Configure ollama_client with custom URL if provided
+    from llm.ollama_client import ollama_client
+    if args.ollama_url != OLLAMA_BASE_URL:
+        await ollama_client.set_base_url(args.ollama_url)
+    
     # Set default model if specified
     if args.model:
-        from llm.ollama_client import ollama_client
         await ollama_client.switch_model(args.model)
     
     # Setup health monitoring
