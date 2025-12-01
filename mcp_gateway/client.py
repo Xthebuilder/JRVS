@@ -22,6 +22,7 @@ Usage:
 
 import asyncio
 import json
+import os
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
@@ -209,6 +210,40 @@ class MCPClient:
 
         print(f"Created default MCP client config at: {self.config_path}")
 
+    async def _validate_server_args(self, server_name: str, args: List[str], env: Optional[Dict[str, str]]) -> Optional[List[str]]:
+        """
+        Validate server arguments based on server type.
+        Returns validated args if valid, None if server should be skipped.
+        """
+        # Handle filesystem server: validate paths
+        if server_name == "filesystem" and len(args) > 2:
+            # Filesystem server format: ["-y", "@modelcontextprotocol/server-filesystem", "path1", "path2", ...]
+            # Skip the first two args (npx flags and package name), validate the paths
+            invalid_paths = []
+            valid_paths = []
+            
+            for path_arg in args[2:]:
+                if os.path.exists(path_arg):
+                    valid_paths.append(path_arg)
+                else:
+                    invalid_paths.append(path_arg)
+            
+            # If we have valid paths, use them
+            if valid_paths:
+                validated_args = args[:2] + valid_paths
+                if invalid_paths:
+                    print(f"Warning: Filesystem server '{server_name}' - filtered out {len(invalid_paths)} invalid path(s): {', '.join(invalid_paths)}")
+                return validated_args
+            else:
+                # No valid paths - disable the server for safety
+                print(f"Warning: Filesystem server '{server_name}' - all configured paths are invalid, disabling server")
+                print(f"  Invalid paths: {', '.join(invalid_paths)}")
+                print(f"  Update paths in {self.config_path} to enable this server")
+                return None
+        
+        # For other servers, return args as-is
+        return args
+
     async def _connect_server(self, name: str, config: MCPServerConfig):
         """
         Connect to an MCP server using the connection manager pattern.
@@ -217,9 +252,16 @@ class MCPClient:
         entered and exited in the same task, which resolves task affinity issues
         with anyio TaskGroups.
         """
+        # Validate configuration for specific server types
+        validated_args = await self._validate_server_args(name, config.args, config.env)
+        
+        # If validation returns None, skip this server
+        if validated_args is None:
+            return
+        
         server_params = StdioServerParameters(
             command=config.command,
-            args=config.args,
+            args=validated_args,
             env=config.env
         )
 
