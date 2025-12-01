@@ -5,12 +5,9 @@
       "args": [
         "-y",
         "@modelcontextprotocol/server-filesystem",
-        "/home/xmanz/JRVS",
-        "/home/xmanz/Documents",
-        "/home/xmanz/Downloads",
         "/tmp"
       ],
-      "description": "File operations - JRVS can read, write, search, and manage files in allowed directories"
+      "description": "File operations - JRVS can read, write, search, and manage files in allowed directories. Add your own paths to the 'args' array above."
     },
     "memory": {
       "command": "npx",
@@ -33,12 +30,10 @@
       "status": "READY TO USE",
       "description": "Filesystem server allows JRVS to access files in specified directories",
       "allowed_paths": [
-        "/home/xmanz/JRVS - JRVS project files",
-        "/home/xmanz/Documents - Your documents",
-        "/home/xmanz/Downloads - Downloaded files",
-        "/tmp - Temporary files"
+        "/tmp - Temporary files (default, always available)"
       ],
-      "security": "Only directories listed in 'args' are accessible. Add/remove paths as needed.",
+      "setup_note": "Add your own directories to the 'args' array in the filesystem server config above. Example: add '/home/yourusername/Documents' to allow access to your Documents folder.",
+      "security": "Only directories listed in 'args' are accessible. Add/remove paths as needed. Paths are validated before connection - invalid paths are filtered out with warnings.",
       "tools": [
         "read_file - Read file contents",
         "write_file - Write to files",
