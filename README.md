@@ -1,6 +1,6 @@
 # Jarvis AI Agent 🤖
 
-A sophisticated AI assistant that combines Ollama LLMs with RAG (Retrieval-Augmented Generation) capabilities, featuring web scraping, vector search, and intelligent context injection.
+A sophisticated AI Interface that combines Local or API LLM responses with RAG (Retrieval-Augmented Generation) capabilities, featuring web scraping, vector search, and intelligent context injection.
 
 ## ✨ Features
 
