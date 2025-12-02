@@ -1,0 +1,72 @@
+# Multi-stage Dockerfile for JRVS Enhanced MCP Server
+# Optimized for production deployment
+
+# ============================================================================
+# Stage 1: Builder - Install dependencies
+# ============================================================================
+FROM python:3.11-slim as builder
+
+WORKDIR /build
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir --user -r requirements.txt
+
+# ============================================================================
+# Stage 2: Runtime - Minimal production image
+# ============================================================================
+FROM python:3.11-slim
+
+LABEL maintainer="JRVS Team"
+LABEL description="JRVS Enhanced MCP Server - Production Ready"
+LABEL version="1.0.0"
+
+# Create non-root user
+RUN groupadd -r jrvs && useradd -r -g jrvs jrvs
+
+# Set working directory
+WORKDIR /app
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy Python packages from builder
+COPY --from=builder /root/.local /home/jrvs/.local
+
+# Copy application code
+COPY --chown=jrvs:jrvs . .
+
+# Create necessary directories
+RUN mkdir -p /app/data /app/logs && \
+    chown -R jrvs:jrvs /app/data /app/logs
+
+# Set environment variables
+ENV PATH=/home/jrvs/.local/bin:$PATH \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    JRVS_LOG_LEVEL=INFO \
+    OLLAMA_BASE_URL=http://ollama:11434
+
+# Switch to non-root user
+USER jrvs
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD python -c "import sys; sys.exit(0)"
+
+# Expose port (if needed for HTTP interface)
+EXPOSE 3000
+
+# Run the enhanced MCP server
+CMD ["python", "mcp/server_enhanced.py"]

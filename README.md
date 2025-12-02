@@ -2,6 +2,15 @@
 
 A sophisticated AI Interface that combines Local or API LLM responses with RAG (Retrieval-Augmented Generation) capabilities, featuring web scraping, vector search, and intelligent context injection.
 
+## 🏢 Enterprise & Hosted Solutions
+
+**Need AI tools but can't use ChatGPT due to compliance?**
+JRVS provides enterprise-ready AI infrastructure that keeps your data private.
+
+→ [Learn about Enterprise & Hosted options](./ENTERPRISE.md)
+
+---
+
 ## ✨ Features
 
 - **🧠 RAG Pipeline**: FAISS vector search with BERT embeddings for intelligent context retrieval
