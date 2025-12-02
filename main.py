@@ -40,7 +40,7 @@ sys.path.insert(0, str(project_root))
 from cli.interface import cli
 from cli.themes import theme
 from core.lazy_loader import health_checker
-from config import OLLAMA_BASE_URL
+from config import OLLAMA_BASE_URL, LMSTUDIO_BASE_URL
 
 def parse_arguments():
     """Parse command line arguments"""
@@ -66,6 +66,18 @@ def parse_arguments():
         "--ollama-url",
         default=OLLAMA_BASE_URL,
         help=f"Ollama API URL (default: {OLLAMA_BASE_URL})"
+    )
+    
+    parser.add_argument(
+        "--lmstudio-url",
+        default=LMSTUDIO_BASE_URL,
+        help=f"LM Studio API URL (default: {LMSTUDIO_BASE_URL})"
+    )
+    
+    parser.add_argument(
+        "--use-lmstudio",
+        action="store_true",
+        help="Use LM Studio instead of Ollama as the LLM provider"
     )
     
     parser.add_argument(
@@ -141,6 +153,20 @@ async def check_ollama_connection(url: str):
     
     return False
 
+async def check_lmstudio_connection(url: str):
+    """Check if LM Studio is running"""
+    import aiohttp
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{url}/models", timeout=aiohttp.ClientTimeout(total=5)) as response:
+                if response.status == 200:
+                    return True
+    except Exception:
+        pass
+    
+    return False
+
 async def setup_health_monitoring():
     """Set up health monitoring for system components"""
     
@@ -192,22 +218,52 @@ async def main():
     if not args.no_banner:
         show_startup_info()
     
-    # Check Ollama connection
-    if not await check_ollama_connection(args.ollama_url):
-        theme.print_error("Cannot connect to Ollama!")
-        theme.print_info(f"Make sure Ollama is running at {args.ollama_url}")
-        theme.print_info("Install Ollama: https://ollama.ai")
-        theme.print_info("Start Ollama: ollama serve")
-        sys.exit(1)
-    
-    # Configure ollama_client with custom URL if provided
-    from llm.ollama_client import ollama_client
-    if args.ollama_url != OLLAMA_BASE_URL:
-        await ollama_client.set_base_url(args.ollama_url)
-    
-    # Set default model if specified
-    if args.model:
-        await ollama_client.switch_model(args.model)
+    # Check LLM provider connection based on mode
+    if args.use_lmstudio:
+        # Use LM Studio
+        if not await check_lmstudio_connection(args.lmstudio_url):
+            theme.print_error("Cannot connect to LM Studio!")
+            theme.print_info(f"Make sure LM Studio is running at {args.lmstudio_url}")
+            theme.print_info("Start LM Studio and enable the local server")
+            sys.exit(1)
+        
+        theme.print_success(f"Connected to LM Studio at {args.lmstudio_url}")
+        
+        # Configure lmstudio_client with custom URL if provided
+        from llm.lmstudio_client import lmstudio_client
+        if args.lmstudio_url != LMSTUDIO_BASE_URL:
+            await lmstudio_client.set_base_url(args.lmstudio_url)
+        
+        # Set default model if specified
+        if args.model:
+            await lmstudio_client.switch_model(args.model)
+        
+        # Store reference for CLI to use
+        cli.llm_client = lmstudio_client
+        cli.llm_provider = "lmstudio"
+    else:
+        # Use Ollama (default)
+        if not await check_ollama_connection(args.ollama_url):
+            theme.print_error("Cannot connect to Ollama!")
+            theme.print_info(f"Make sure Ollama is running at {args.ollama_url}")
+            theme.print_info("Install Ollama: https://ollama.ai")
+            theme.print_info("Start Ollama: ollama serve")
+            theme.print_info("")
+            theme.print_info("Alternatively, use LM Studio with: --use-lmstudio")
+            sys.exit(1)
+        
+        # Configure ollama_client with custom URL if provided
+        from llm.ollama_client import ollama_client
+        if args.ollama_url != OLLAMA_BASE_URL:
+            await ollama_client.set_base_url(args.ollama_url)
+        
+        # Set default model if specified
+        if args.model:
+            await ollama_client.switch_model(args.model)
+        
+        # Store reference for CLI to use
+        cli.llm_client = ollama_client
+        cli.llm_provider = "ollama"
     
     # Setup health monitoring
     await setup_health_monitoring()

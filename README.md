@@ -30,7 +30,9 @@ JRVS provides enterprise-ready AI infrastructure that keeps your data private.
 ### Prerequisites
 
 1. **Python 3.8+** - [Download Python](https://python.org/downloads/)
-2. **Ollama** - [Install Ollama](https://ollama.ai)
+2. **Ollama** OR **LM Studio** - Choose one LLM provider:
+   - [Install Ollama](https://ollama.ai)
+   - [Install LM Studio](https://lmstudio.ai)
 3. **Node.js** (optional, for MCP servers and web UI) - [Download Node.js](https://nodejs.org/)
 
 ### Automated Setup (Recommended)
@@ -380,13 +382,20 @@ curl -X POST http://localhost:8000/api/chat \
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | URL of the Ollama API server |
-| `OLLAMA_DEFAULT_MODEL` | `deepseek-r1:14b` | Default model to use |
+| `OLLAMA_DEFAULT_MODEL` | `deepseek-r1:14b` | Default Ollama model to use |
+| `LMSTUDIO_BASE_URL` | `http://127.0.0.1:1234/v1` | URL of the LM Studio API server |
+| `LMSTUDIO_DEFAULT_MODEL` | `` | Default LM Studio model (auto-detected if empty) |
 
 Example for connecting to a remote Ollama instance:
 ```bash
 export OLLAMA_BASE_URL="http://192.168.1.100:11434"
 export OLLAMA_DEFAULT_MODEL="llama3:8b"
 python main.py
+```
+
+Example for using LM Studio:
+```bash
+python main.py --use-lmstudio
 ```
 
 ### Command Line Options
@@ -397,8 +406,10 @@ python main.py --help
 
 Options:
 - `--theme {matrix,cyberpunk,minimal}` - Set CLI theme
-- `--model MODEL_NAME` - Set default Ollama model
+- `--model MODEL_NAME` - Set default model
 - `--ollama-url URL` - Custom Ollama API URL
+- `--lmstudio-url URL` - Custom LM Studio API URL
+- `--use-lmstudio` - Use LM Studio instead of Ollama
 - `--no-banner` - Skip ASCII banner
 - `--debug` - Enable debug mode
 
@@ -423,7 +434,8 @@ jarvis_ai_agent/
 │   ├── vector_store.py  # FAISS vector operations
 │   └── retriever.py     # RAG pipeline coordinator
 ├── llm/
-│   └── ollama_client.py # Ollama API integration
+│   ├── ollama_client.py   # Ollama API integration
+│   └── lmstudio_client.py # LM Studio API integration
 ├── cli/
 │   ├── interface.py     # Main CLI interface
 │   ├── themes.py        # Theme management
@@ -477,6 +489,18 @@ context = await rag_retriever.retrieve_context(query)
 response = await ollama_client.generate(query, context=context)
 ```
 
+### Using LM Studio
+
+LM Studio is an alternative to Ollama for running local LLMs:
+
+```python
+from llm.lmstudio_client import lmstudio_client
+
+# Use LM Studio
+context = await rag_retriever.retrieve_context(query)
+response = await lmstudio_client.generate(query, context=context)
+```
+
 ## 🐛 Troubleshooting
 
 ### Common Issues
@@ -485,6 +509,12 @@ response = await ollama_client.generate(query, context=context)
 - Make sure Ollama is running: `ollama serve`
 - Check if port 11434 is free
 - Verify Ollama installation
+- Alternatively, use LM Studio: `python main.py --use-lmstudio`
+
+**"Cannot connect to LM Studio"**
+- Make sure LM Studio is running and the local server is enabled
+- Default URL is `http://127.0.0.1:1234/v1`
+- Load a model in LM Studio before starting JRVS
 
 **"No models available"**
 - Pull at least one model: `ollama pull llama3.1`

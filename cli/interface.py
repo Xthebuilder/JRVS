@@ -21,6 +21,9 @@ class JarvisCLI:
         self.running = True
         self.command_handler = CommandHandler(self)
         self.conversation_history = []
+        # LLM client can be set to either ollama_client or lmstudio_client
+        self.llm_client = ollama_client  # default
+        self.llm_provider = "ollama"  # default
 
     async def initialize(self):
         """Initialize all components"""
@@ -42,13 +45,15 @@ class JarvisCLI:
                 else:
                     theme.print_warning("No MCP servers connected (check mcp_gateway/client_config.json)")
 
-            # Discover available models
-            models = await ollama_client.discover_models()
+            # Discover available models using the configured LLM client
+            models = await self.llm_client.discover_models()
             if not models:
-                theme.print_error("No Ollama models found. Please install Ollama and pull some models.")
+                provider_name = "LM Studio" if self.llm_provider == "lmstudio" else "Ollama"
+                theme.print_error(f"No {provider_name} models found. Please check your LLM provider setup.")
                 return False
 
-            theme.print_success(f"Found {len(models)} Ollama models")
+            provider_name = "LM Studio" if self.llm_provider == "lmstudio" else "Ollama"
+            theme.print_success(f"Found {len(models)} {provider_name} models")
             theme.print_success("Jarvis AI Agent initialized successfully!")
 
             return True
@@ -136,7 +141,7 @@ class JarvisCLI:
                 progress.update(task, description="Generating response...")
 
                 # Generate response with context injection
-                response = await ollama_client.generate(
+                response = await self.llm_client.generate(
                     prompt=message,
                     context=context,
                     stream=False
@@ -152,7 +157,7 @@ class JarvisCLI:
                     session_id=self.session_id,
                     user_message=message,
                     ai_response=response,
-                    model_used=ollama_client.current_model,
+                    model_used=self.llm_client.current_model,
                     context_used=f"Tools: {tool_summary}\n{context[:500]}"
                 )
 
@@ -160,7 +165,7 @@ class JarvisCLI:
                 self.conversation_history.append({
                     'user': message,
                     'assistant': response,
-                    'model': ollama_client.current_model,
+                    'model': self.llm_client.current_model,
                     'tools_used': agent_result.get("summary", "")
                 })
 
@@ -192,7 +197,7 @@ class JarvisCLI:
                     session_id=self.session_id,
                     user_message=message,
                     ai_response=response,
-                    model_used=ollama_client.current_model,
+                    model_used=self.llm_client.current_model,
                     context_used=context[:500] + "..." if len(context) > 500 else context
                 )
                 
@@ -201,8 +206,8 @@ class JarvisCLI:
 
     async def _generate_streaming(self, message: str, context: str):
         """Generate streaming response (placeholder for actual streaming)"""
-        # This would integrate with the actual Ollama streaming API
-        response = await ollama_client.generate(
+        # This would integrate with the actual LLM streaming API
+        response = await self.llm_client.generate(
             prompt=message,
             context=context,
             stream=False
@@ -233,7 +238,7 @@ class JarvisCLI:
                 log_file = mcp_agent.save_session_log(self.session_id)
                 theme.print_info(f"Session log saved: {log_file}")
 
-            await ollama_client.cleanup()
+            await self.llm_client.cleanup()
             await web_scraper.cleanup()
             await rag_retriever.cleanup()
             await mcp_client.cleanup()
@@ -246,15 +251,15 @@ class JarvisCLI:
     # Utility methods for commands
     async def list_models(self):
         """List available models"""
-        models = await ollama_client.list_models()
+        models = await self.llm_client.list_models()
         if models:
-            theme.print_model_info(models, ollama_client.current_model)
+            theme.print_model_info(models, self.llm_client.current_model)
         else:
             theme.print_error("No models available")
 
     async def switch_model(self, model_name: str):
         """Switch to a different model"""
-        if await ollama_client.switch_model(model_name):
+        if await self.llm_client.switch_model(model_name):
             theme.print_success(f"Switched to model: {model_name}")
         else:
             theme.print_error(f"Failed to switch to model: {model_name}")
@@ -295,7 +300,8 @@ class JarvisCLI:
         stats['session'] = {
             'session_id': self.session_id[:8] + "...",
             'conversations': len(self.conversation_history),
-            'current_model': ollama_client.current_model
+            'current_model': self.llm_client.current_model,
+            'llm_provider': self.llm_provider
         }
         
         theme.print_stats(stats)

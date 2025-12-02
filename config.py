@@ -19,12 +19,17 @@ VECTOR_INDEX_PATH = DATA_DIR / "faiss_index"
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 DEFAULT_MODEL = os.environ.get("OLLAMA_DEFAULT_MODEL", "deepseek-r1:14b")
 
+# LM Studio settings (OpenAI-compatible API)
+LMSTUDIO_BASE_URL = os.environ.get("LMSTUDIO_BASE_URL", "http://127.0.0.1:1234/v1")
+LMSTUDIO_DEFAULT_MODEL = os.environ.get("LMSTUDIO_DEFAULT_MODEL", "")
+
 # Timeout settings (in seconds)
 TIMEOUTS = {
     "embedding_generation": 60,
     "vector_search": 10,
     "context_building": 60,
     "ollama_response": 300,  # 5 minutes
+    "llm_response": 300,  # Generic LLM response timeout (5 minutes)
     "web_scraping": 45
 }
 
