@@ -23,7 +23,7 @@ class LMStudioClient:
     async def _get_session(self):
         """Get or create HTTP session with timeout"""
         if self.session is None or self.session.closed:
-            timeout = aiohttp.ClientTimeout(total=TIMEOUTS["ollama_response"])
+            timeout = aiohttp.ClientTimeout(total=TIMEOUTS["llm_response"])
             self.session = aiohttp.ClientSession(timeout=timeout)
         return self.session
 
@@ -135,7 +135,7 @@ class LMStudioClient:
             return response
             
         except asyncio.TimeoutError:
-            print(f"Timeout after {TIMEOUTS['ollama_response']}s")
+            print(f"Timeout after {TIMEOUTS['llm_response']}s")
             return None
         except Exception as e:
             print(f"Error generating response: {e}")

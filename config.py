@@ -29,6 +29,7 @@ TIMEOUTS = {
     "vector_search": 10,
     "context_building": 60,
     "ollama_response": 300,  # 5 minutes
+    "llm_response": 300,  # Generic LLM response timeout (5 minutes)
     "web_scraping": 45
 }
 

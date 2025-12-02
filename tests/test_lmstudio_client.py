@@ -22,31 +22,19 @@ async def test_lmstudio_client():
     # Create client with test URL
     client = LMStudioClient(base_url="http://127.0.0.1:1234/v1")
     
-    # Test 1: Check connection (will fail if LM Studio is not running)
-    print("1. Testing connection check...")
-    is_connected = await client._check_connection()
-    if is_connected:
-        print("   ✓ Connected to LM Studio")
+    # Test 1: Try to discover models (will return empty list if LM Studio is not running)
+    print("1. Testing model discovery (connection check)...")
+    models = await client.discover_models()
+    if models:
+        print(f"   ✓ Connected to LM Studio, found {len(models)} model(s)")
     else:
         print("   ✗ LM Studio not running (expected if not installed)")
         print("   Skipping further tests as LM Studio is not available")
         await client.cleanup()
         return True  # Not a failure, just not available
     
-    # Test 2: Discover models
-    print("\n2. Testing model discovery...")
-    models = await client.discover_models()
-    if models:
-        print(f"   ✓ Found {len(models)} model(s):")
-        for model in models[:3]:
-            print(f"      • {model}")
-        if len(models) > 3:
-            print(f"      ... and {len(models) - 3} more")
-    else:
-        print("   ⚠ No models found")
-    
-    # Test 3: List models with details
-    print("\n3. Testing list_models...")
+    # Test 2: List models with details
+    print("\n2. Testing list_models...")
     model_list = await client.list_models()
     if model_list:
         print(f"   ✓ Got model list with {len(model_list)} items")
@@ -55,9 +43,9 @@ async def test_lmstudio_client():
     else:
         print("   ⚠ Empty model list")
     
-    # Test 4: Test generate (non-streaming)
+    # Test 3: Test generate (non-streaming)
     if models:
-        print("\n4. Testing text generation...")
+        print("\n3. Testing text generation...")
         response = await client.generate(
             prompt="Say 'hello' and nothing else.",
             stream=False
@@ -67,8 +55,8 @@ async def test_lmstudio_client():
         else:
             print("   ✗ Failed to generate response")
     
-    # Test 5: Test set_base_url
-    print("\n5. Testing set_base_url...")
+    # Test 4: Test set_base_url
+    print("\n4. Testing set_base_url...")
     await client.set_base_url("http://localhost:1234/v1")
     assert client.base_url == "http://localhost:1234/v1"
     print("   ✓ Base URL updated successfully")
