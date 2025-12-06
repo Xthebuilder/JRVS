@@ -17,7 +17,7 @@ VECTOR_INDEX_PATH = DATA_DIR / "faiss_index"
 
 # Ollama settings
 OLLAMA_BASE_URL = "http://localhost:11434"
-DEFAULT_MODEL = "deepseek-r1:14b"
+DEFAULT_MODEL = "jarvis"  # Custom JARVIS model based on deepseek-r1:14b
 
 # Timeout settings (in seconds)
 TIMEOUTS = {

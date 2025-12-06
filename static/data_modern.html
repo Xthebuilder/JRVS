@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JRVS Data Lab</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #4F46E5;
+            --primary-hover: #4338CA;
+            --bg-main: #FAFAFA;
+            --bg-surface: #FFFFFF;
+            --border: #E5E7EB;
+            --border-hover: #D1D5DB;
+            --text-primary: #111827;
+            --text-secondary: #6B7280;
+            --text-muted: #9CA3AF;
+            --success: #10B981;
+            --warning: #F59E0B;
+            --danger: #EF4444;
+            --shadow: 0 1px 3px rgba(0,0,0,0.1);
+            --shadow-lg: 0 10px 25px rgba(0,0,0,0.1);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', sans-serif;
+            background: var(--bg-main);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        /* Header */
+        .header {
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .logo {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .header-right {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        /* Main Layout */
+        .container {
+            display: flex;
+            height: calc(100vh - 65px);
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 260px;
+            background: var(--bg-surface);
+            border-right: 1px solid var(--border);
+            padding: 20px 16px;
+            overflow-y: auto;
+        }
+
+        .sidebar-section {
+            margin-bottom: 24px;
+        }
+
+        .section-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+            letter-spacing: 0.5px;
+        }
+
+        .dataset-item {
+            padding: 10px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-bottom: 4px;
+            transition: all 0.15s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .dataset-item:hover {
+            background: var(--bg-main);
+        }
+
+        .dataset-item.active {
+            background: #EEF2FF;
+            color: var(--primary);
+            font-weight: 500;
+        }
+
+        .dataset-icon {
+            font-size: 16px;
+        }
+
+        .dataset-info {
+            flex: 1;
+        }
+
+        .dataset-name {
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .dataset-meta {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Toolbar */
+        .toolbar {
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border);
+            padding: 12px 24px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .search-box {
+            flex: 1;
+            min-width: 200px;
+            max-width: 400px;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 8px 12px 8px 36px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 14px;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%236B7280" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>') no-repeat 12px center;
+        }
+
+        .search-box input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+        }
+
+        .btn-secondary {
+            background: var(--bg-main);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: #F3F4F6;
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 13px;
+        }
+
+        /* Stats Bar */
+        .stats-bar {
+            background: var(--bg-surface);
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            gap: 32px;
+        }
+
+        .stat {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-top: 4px;
+        }
+
+        /* Data Table */
+        .table-container {
+            flex: 1;
+            overflow: auto;
+            background: var(--bg-surface);
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            font-size: 14px;
+        }
+
+        .data-table thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .data-table th {
+            background: #F9FAFB;
+            border-bottom: 1px solid var(--border);
+            border-right: 1px solid var(--border);
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .data-table th:hover {
+            background: #F3F4F6;
+        }
+
+        .data-table th:last-child {
+            border-right: none;
+        }
+
+        .data-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            border-right: 1px solid var(--border);
+            color: var(--text-primary);
+        }
+
+        .data-table td:last-child {
+            border-right: none;
+        }
+
+        .data-table tbody tr:hover {
+            background: #FAFBFC;
+        }
+
+        .data-table tbody tr {
+            transition: background 0.1s;
+        }
+
+        /* Cell Types */
+        .cell-number {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+            font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+        }
+
+        .cell-null {
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 4px;
+            padding: 0 24px;
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .tab {
+            padding: 12px 16px;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.15s;
+        }
+
+        .tab:hover {
+            color: var(--text-primary);
+        }
+
+        .tab.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+
+        .tab-content {
+            display: none;
+            flex: 1;
+            flex-direction: column;
+        }
+
+        .tab-content.active {
+            display: flex;
+        }
+
+        /* Upload Zone */
+        .upload-zone {
+            margin: 24px;
+            padding: 48px;
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .upload-zone:hover {
+            border-color: var(--primary);
+            background: #FAFBFE;
+        }
+
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .upload-text {
+            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        .upload-subtext {
+            font-size: 14px;
+            color: var(--text-muted);
+        }
+
+        /* AI Insights Panel */
+        .insights-panel {
+            padding: 24px;
+            max-width: 1200px;
+        }
+
+        .insight-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+
+        .insight-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .insight-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            background: #EEF2FF;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .insight-title {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .code-block {
+            background: #1E1E1E;
+            color: #D4D4D4;
+            padding: 16px;
+            border-radius: 6px;
+            font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            margin-top: 12px;
+        }
+
+        /* Loading States */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 60px;
+            color: var(--text-muted);
+        }
+
+        .spinner {
+            border: 3px solid var(--border);
+            border-top: 3px solid var(--primary);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin-right: 16px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 80px 24px;
+        }
+
+        .empty-icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+            opacity: 0.3;
+        }
+
+        .empty-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .empty-text {
+            color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+
+        /* Filter Dropdown */
+        .filter-dropdown {
+            position: relative;
+        }
+
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            box-shadow: var(--shadow-lg);
+            min-width: 200px;
+            margin-top: 4px;
+            z-index: 1000;
+        }
+
+        .dropdown-content.show {
+            display: block;
+        }
+
+        .dropdown-item {
+            padding: 10px 16px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .dropdown-item:hover {
+            background: var(--bg-main);
+        }
+
+        /* Badge */
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .badge-success {
+            background: #D1FAE5;
+            color: #065F46;
+        }
+
+        .badge-warning {
+            background: #FEF3C7;
+            color: #92400E;
+        }
+
+        .badge-info {
+            background: #DBEAFE;
+            color: #1E40AF;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="header-left">
+            <div class="logo">
+                <span>📊</span>
+                JRVS Data Lab
+            </div>
+            <span class="badge badge-info">AI-Powered</span>
+        </div>
+        <div class="header-right">
+            <button class="btn btn-secondary btn-sm" onclick="window.location.href='/'">
+                🏠 Home
+            </button>
+            <button class="btn btn-primary btn-sm" onclick="showUpload()">
+                ⬆️ Upload Data
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-section">
+                <div class="section-title">Datasets</div>
+                <div id="datasetsList">
+                    <div class="empty-state" style="padding: 40px 20px;">
+                        <div style="font-size: 32px; opacity: 0.3;">📁</div>
+                        <div style="font-size: 13px; color: var(--text-muted);">No datasets loaded</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="section-title">Notebooks</div>
+                <button class="btn btn-secondary btn-sm" style="width: 100%;" onclick="createNotebook()">
+                    ➕ New Notebook
+                </button>
+                <div id="notebooksList" style="margin-top: 12px;"></div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Tabs -->
+            <div class="tabs">
+                <div class="tab active" onclick="switchTab('table')">📋 Table</div>
+                <div class="tab" onclick="switchTab('query')">🔍 Query</div>
+                <div class="tab" onclick="switchTab('insights')">💡 AI Insights</div>
+                <div class="tab" onclick="switchTab('visualize')">📈 Visualize</div>
+            </div>
+
+            <!-- Table Tab -->
+            <div id="tableTab" class="tab-content active">
+                <!-- Toolbar -->
+                <div class="toolbar">
+                    <div class="search-box">
+                        <input type="text" placeholder="Search data..." id="searchInput">
+                    </div>
+                    <button class="btn btn-secondary btn-sm">
+                        ⚙️ Filter
+                    </button>
+                    <button class="btn btn-secondary btn-sm">
+                        ⬇️ Export
+                    </button>
+                    <div style="flex: 1;"></div>
+                    <button class="btn btn-secondary btn-sm" onclick="refreshData()">
+                        🔄 Refresh
+                    </button>
+                </div>
+
+                <!-- Stats Bar -->
+                <div class="stats-bar" id="statsBar" style="display: none;">
+                    <div class="stat">
+                        <div class="stat-label">Rows</div>
+                        <div class="stat-value" id="statRows">0</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">Columns</div>
+                        <div class="stat-value" id="statColumns">0</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">Missing</div>
+                        <div class="stat-value" id="statMissing">0</div>
+                    </div>
+                </div>
+
+                <!-- Table -->
+                <div class="table-container" id="tableContainer">
+                    <div class="empty-state">
+                        <div class="empty-icon">📊</div>
+                        <div class="empty-title">No data loaded</div>
+                        <div class="empty-text">Upload a CSV or Excel file to get started</div>
+                        <button class="btn btn-primary" onclick="showUpload()">
+                            ⬆️ Upload Dataset
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Query Tab -->
+            <div id="queryTab" class="tab-content">
+                <div style="padding: 24px; max-width: 1200px;">
+                    <h3 style="margin-bottom: 16px;">Query Your Data</h3>
+                    <p style="color: var(--text-muted); margin-bottom: 16px;">
+                        Use pandas query syntax to filter and analyze your data
+                    </p>
+                    <input type="text" id="queryInput" placeholder="e.g., Age > 30 and City == 'NYC'"
+                           style="width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; margin-bottom: 12px;">
+                    <button class="btn btn-primary" onclick="runQuery()">
+                        ▶️ Run Query
+                    </button>
+                    <div id="queryResults" style="margin-top: 24px;"></div>
+                </div>
+            </div>
+
+            <!-- AI Insights Tab -->
+            <div id="insightsTab" class="tab-content">
+                <div class="insights-panel">
+                    <div style="margin-bottom: 24px;">
+                        <h3 style="margin-bottom: 8px;">🤖 AI-Powered Insights</h3>
+                        <p style="color: var(--text-muted);">
+                            JARCORE will analyze your data and provide intelligent insights
+                        </p>
+                    </div>
+                    <button class="btn btn-primary" onclick="getAIInsights()">
+                        ✨ Generate Insights
+                    </button>
+                    <div id="insightsContent" style="margin-top: 24px;"></div>
+                </div>
+            </div>
+
+            <!-- Visualize Tab -->
+            <div id="visualizeTab" class="tab-content">
+                <div style="padding: 24px;">
+                    <h3 style="margin-bottom: 16px;">📈 Data Visualization</h3>
+                    <p style="color: var(--text-muted);">Coming soon: Interactive charts and graphs</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Modal (hidden input) -->
+    <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" style="display: none;">
+    <input type="text" id="filePathInput" placeholder="Or enter file path" style="display: none;">
+
+    <script>
+        let currentDataset = null;
+        let datasets = [];
+
+        // Load datasets on start
+        loadDatasets();
+
+        function showUpload() {
+            const path = prompt('Enter file path to CSV or Excel file:');
+            if (!path) return;
+            loadFile(path);
+        }
+
+        async function loadFile(path) {
+            const ext = path.split('.').pop().toLowerCase();
+            const endpoint = ext === 'csv' ? '/api/data/upload/csv' : '/api/data/upload/excel';
+
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({file_path: path})
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showNotification('✅ Dataset loaded successfully!');
+                    await loadDatasets();
+                    if (result.metadata) {
+                        selectDataset(result.metadata.name);
+                    }
+                } else {
+                    showNotification('❌ Error: ' + result.error);
+                }
+            } catch (error) {
+                showNotification('❌ Error loading file: ' + error);
+            }
+        }
+
+        async function loadDatasets() {
+            const response = await fetch('/api/data/datasets');
+            const data = await response.json();
+            datasets = data.datasets;
+
+            const container = document.getElementById('datasetsList');
+
+            if (datasets.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state" style="padding: 40px 20px;">
+                        <div style="font-size: 32px; opacity: 0.3;">📁</div>
+                        <div style="font-size: 13px; color: var(--text-muted);">No datasets loaded</div>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = datasets.map(ds => `
+                <div class="dataset-item ${currentDataset === ds.name ? 'active' : ''}" onclick="selectDataset('${ds.name}')">
+                    <div class="dataset-icon">📊</div>
+                    <div class="dataset-info">
+                        <div class="dataset-name">${ds.name}</div>
+                        <div class="dataset-meta">${ds.rows}×${ds.columns} • ${ds.memory_mb}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function selectDataset(name) {
+            currentDataset = name;
+            await loadDatasets();
+
+            const response = await fetch(`/api/data/dataset/${name}`);
+            const data = await response.json();
+
+            // Update stats
+            document.getElementById('statsBar').style.display = 'flex';
+            document.getElementById('statRows').textContent = data.rows.toLocaleString();
+            document.getElementById('statColumns').textContent = data.columns;
+
+            // Calculate missing values
+            const missingTotal = Object.values(data.preview[0] || {}).filter(v => v === null).length;
+            document.getElementById('statMissing').textContent = missingTotal;
+
+            // Display table
+            displayTable(data.preview, data.column_types);
+        }
+
+        function displayTable(rows, columnTypes) {
+            const container = document.getElementById('tableContainer');
+
+            if (!rows || rows.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">📊</div>
+                        <div class="empty-title">No data</div>
+                    </div>
+                `;
+                return;
+            }
+
+            const columns = Object.keys(rows[0]);
+
+            let html = '<table class="data-table"><thead><tr>';
+            columns.forEach(col => {
+                html += `<th onclick="sortColumn('${col}')">${col} ▴</th>`;
+            });
+            html += '</tr></thead><tbody>';
+
+            rows.forEach(row => {
+                html += '<tr>';
+                columns.forEach(col => {
+                    const value = row[col];
+                    const isNumber = typeof value === 'number';
+                    const isNull = value === null || value === undefined;
+
+                    const cellClass = isNumber ? 'cell-number' : (isNull ? 'cell-null' : '');
+                    const displayValue = isNull ? 'null' : value;
+
+                    html += `<td class="${cellClass}">${displayValue}</td>`;
+                });
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        async function runQuery() {
+            if (!currentDataset) {
+                showNotification('⚠️ Please select a dataset first');
+                return;
+            }
+
+            const query = document.getElementById('queryInput').value;
+            if (!query) return;
+
+            const container = document.getElementById('queryResults');
+            container.innerHTML = '<div class="loading"><div class="spinner"></div>Running query...</div>';
+
+            try {
+                const response = await fetch('/api/data/query', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({dataset_name: currentDataset, query: query})
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    container.innerHTML = `
+                        <div style="margin-bottom: 16px;">
+                            <span class="badge badge-success">${result.rows_returned} rows returned</span>
+                        </div>
+                    `;
+                    if (result.data.length > 0) {
+                        displayQueryResults(result.data);
+                    }
+                } else {
+                    container.innerHTML = `<div style="color: var(--danger); padding: 16px; background: #FEE2E2; border-radius: 6px;">❌ ${result.error}</div>`;
+                }
+            } catch (error) {
+                container.innerHTML = `<div style="color: var(--danger);">Error: ${error}</div>`;
+            }
+        }
+
+        function displayQueryResults(data) {
+            const columns = Object.keys(data[0]);
+            let html = '<table class="data-table"><thead><tr>';
+            columns.forEach(col => html += `<th>${col}</th>`);
+            html += '</tr></thead><tbody>';
+            data.forEach(row => {
+                html += '<tr>';
+                columns.forEach(col => {
+                    const value = row[col];
+                    const isNumber = typeof value === 'number';
+                    html += `<td class="${isNumber ? 'cell-number' : ''}">${value !== null ? value : '<span class="cell-null">null</span>'}</td>`;
+                });
+                html += '</tr>';
+            });
+            html += '</tbody></table>';
+            document.getElementById('queryResults').innerHTML += html;
+        }
+
+        async function getAIInsights() {
+            if (!currentDataset) {
+                showNotification('⚠️ Please select a dataset first');
+                return;
+            }
+
+            const container = document.getElementById('insightsContent');
+            container.innerHTML = '<div class="loading"><div class="spinner"></div>JARCORE is analyzing your data...</div>';
+
+            try {
+                const response = await fetch(`/api/data/ai-insights/${currentDataset}`, {method: 'POST'});
+                const result = await response.json();
+
+                if (result.success) {
+                    container.innerHTML = `
+                        <div class="insight-card">
+                            <div class="insight-header">
+                                <div class="insight-icon">💡</div>
+                                <div class="insight-title">Key Insights</div>
+                            </div>
+                            <p>${result.insights}</p>
+                        </div>
+                        <div class="insight-card">
+                            <div class="insight-header">
+                                <div class="insight-icon">📝</div>
+                                <div class="insight-title">Suggested Analysis Code</div>
+                            </div>
+                            <div class="code-block">${escapeHtml(result.suggested_code)}</div>
+                        </div>
+                    `;
+                } else {
+                    container.innerHTML = `<div style="color: var(--danger);">Error: ${result.error}</div>`;
+                }
+            } catch (error) {
+                container.innerHTML = `<div style="color: var(--danger);">Error: ${error}</div>`;
+            }
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+
+            event.target.classList.add('active');
+            document.getElementById(tabName + 'Tab').classList.add('active');
+        }
+
+        function refreshData() {
+            if (currentDataset) {
+                selectDataset(currentDataset);
+            }
+        }
+
+        function createNotebook() {
+            const name = prompt('Notebook name:');
+            if (!name) return;
+            // TODO: Create notebook
+            showNotification('📓 Notebook feature coming soon!');
+        }
+
+        function showNotification(message) {
+            // Simple notification (you can make this fancier)
+            alert(message);
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function sortColumn(columnName) {
+            // TODO: Implement sorting
+            console.log('Sort by:', columnName);
+        }
+    </script>
+</body>
+</html>

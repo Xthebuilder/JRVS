@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JRVS Data Analysis</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .data-analysis-container {
+            display: flex;
+            height: calc(100vh - 60px);
+            gap: 20px;
+            padding: 20px;
+        }
+
+        .left-panel {
+            width: 300px;
+            background: var(--surface);
+            border-radius: 12px;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .main-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .dataset-card {
+            background: var(--surface);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .dataset-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .dataset-card.active {
+            border: 2px solid var(--primary);
+        }
+
+        .dataset-info {
+            font-size: 0.9em;
+            color: var(--text-secondary);
+            margin-top: 5px;
+        }
+
+        .upload-section {
+            background: var(--surface);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+
+        .data-table-container {
+            background: var(--surface);
+            border-radius: 12px;
+            padding: 20px;
+            overflow-x: auto;
+            flex: 1;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9em;
+        }
+
+        .data-table th {
+            background: var(--primary);
+            color: white;
+            padding: 12px;
+            text-align: left;
+            position: sticky;
+            top: 0;
+            cursor: pointer;
+        }
+
+        .data-table th:hover {
+            background: var(--primary-dark);
+        }
+
+        .data-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .data-table tr:hover {
+            background: var(--hover);
+        }
+
+        .stats-panel {
+            background: var(--surface);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .stat-card {
+            background: var(--background);
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: var(--primary);
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            color: var(--text-secondary);
+            margin-top: 5px;
+        }
+
+        .ai-insights-panel {
+            background: var(--surface);
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .notebook-cell {
+            background: var(--surface);
+            border-radius: 8px;
+            margin-bottom: 15px;
+            overflow: hidden;
+        }
+
+        .cell-header {
+            background: var(--background);
+            padding: 10px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.85em;
+            color: var(--text-secondary);
+        }
+
+        .cell-content {
+            padding: 15px;
+        }
+
+        .code-cell {
+            font-family: 'Monaco', 'Consolas', monospace;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+
+        .markdown-cell {
+            line-height: 1.6;
+        }
+
+        .cell-output {
+            margin-top: 10px;
+            padding: 10px;
+            background: var(--background);
+            border-left: 3px solid var(--primary);
+            border-radius: 4px;
+        }
+
+        .action-btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.2s;
+        }
+
+        .action-btn:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+        }
+
+        .action-btn.secondary {
+            background: var(--secondary);
+        }
+
+        .query-box {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 0.9em;
+            margin-bottom: 10px;
+        }
+
+        .tab-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            background: var(--surface);
+            border-radius: 8px 8px 0 0;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .tab.active {
+            background: var(--primary);
+            color: white;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📊 JRVS Data Analysis</h1>
+        <p>AI-Powered Data Analysis Partner</p>
+    </div>
+
+    <div class="data-analysis-container">
+        <!-- Left Panel: Datasets & Notebooks -->
+        <div class="left-panel">
+            <h2>📁 Datasets</h2>
+            <div class="upload-section">
+                <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" style="display:none">
+                <button class="action-btn" onclick="document.getElementById('fileInput').click()">
+                    Upload CSV/Excel
+                </button>
+                <input type="text" id="filePathInput" placeholder="Or enter file path" class="query-box" style="margin-top:10px">
+                <button class="action-btn secondary" onclick="loadFromPath()">Load File</button>
+            </div>
+
+            <div id="datasetsList"></div>
+
+            <h2 style="margin-top: 30px;">📓 Notebooks</h2>
+            <button class="action-btn" onclick="createNotebook()">New Notebook</button>
+            <div id="notebooksList" style="margin-top: 15px;"></div>
+        </div>
+
+        <!-- Main Panel: Data View & Analysis -->
+        <div class="main-panel">
+            <!-- Tabs -->
+            <div class="tab-container">
+                <div class="tab active" onclick="switchTab('data')">📊 Data View</div>
+                <div class="tab" onclick="switchTab('analysis')">🔍 Analysis</div>
+                <div class="tab" onclick="switchTab('insights')">💡 AI Insights</div>
+                <div class="tab" onclick="switchTab('notebook')">📓 Notebook</div>
+            </div>
+
+            <!-- Data View Tab -->
+            <div id="dataTab" class="tab-content active">
+                <div class="stats-panel" id="statsPanel" style="display:none;">
+                    <h3>Dataset Statistics</h3>
+                    <div class="stat-grid" id="statGrid"></div>
+                </div>
+
+                <div class="data-table-container">
+                    <div id="dataTableHeader" style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+                        <h3 id="datasetTitle">No dataset loaded</h3>
+                        <button class="action-btn secondary" onclick="refreshData()">🔄 Refresh</button>
+                    </div>
+                    <div id="dataTableContent">
+                        <p class="loading">Select or upload a dataset to begin</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analysis Tab -->
+            <div id="analysisTab" class="tab-content">
+                <div class="data-table-container">
+                    <h3>Query Data</h3>
+                    <p style="color: var(--text-secondary); margin-bottom: 10px;">
+                        Use pandas query syntax: <code>Age > 30 and City == 'NYC'</code>
+                    </p>
+                    <input type="text" id="queryInput" class="query-box" placeholder="Enter your query...">
+                    <button class="action-btn" onclick="runQuery()">Run Query</button>
+
+                    <div id="queryResults" style="margin-top: 20px;"></div>
+                </div>
+            </div>
+
+            <!-- AI Insights Tab -->
+            <div id="insightsTab" class="tab-content">
+                <div class="ai-insights-panel">
+                    <h3>🤖 JARCORE AI Insights</h3>
+                    <p style="color: var(--text-secondary); margin-bottom: 15px;">
+                        Let JARCORE analyze your data and suggest insights, visualizations, and analyses.
+                    </p>
+                    <button class="action-btn" onclick="getAIInsights()">Generate Insights</button>
+
+                    <div id="insightsContent" style="margin-top: 20px;"></div>
+                </div>
+            </div>
+
+            <!-- Notebook Tab -->
+            <div id="notebookTab" class="tab-content">
+                <div class="data-table-container">
+                    <h3>Jupyter Notebook</h3>
+                    <div id="notebookContent">
+                        <p class="loading">Create or load a notebook to begin</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentDataset = null;
+        let currentNotebook = null;
+
+        // Load datasets on page load
+        window.addEventListener('load', () => {
+            loadDatasets();
+            loadNotebooks();
+        });
+
+        // File upload handler
+        document.getElementById('fileInput').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            // TODO: Implement file upload
+            alert('File upload functionality will be implemented. For now, use file path.');
+        });
+
+        async function loadFromPath() {
+            const path = document.getElementById('filePathInput').value;
+            if (!path) return;
+
+            const ext = path.split('.').pop().toLowerCase();
+
+            try {
+                let response;
+                if (ext === 'csv') {
+                    response = await fetch('/api/data/upload/csv', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({file_path: path})
+                    });
+                } else if (ext === 'xlsx' || ext === 'xls') {
+                    response = await fetch('/api/data/upload/excel', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({file_path: path})
+                    });
+                }
+
+                const result = await response.json();
+                if (result.success) {
+                    alert('Dataset loaded successfully!');
+                    loadDatasets();
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error loading file: ' + error);
+            }
+        }
+
+        async function loadDatasets() {
+            const response = await fetch('/api/data/datasets');
+            const data = await response.json();
+
+            const container = document.getElementById('datasetsList');
+            container.innerHTML = '';
+
+            if (data.datasets.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.9em;">No datasets loaded</p>';
+                return;
+            }
+
+            data.datasets.forEach(dataset => {
+                const card = document.createElement('div');
+                card.className = 'dataset-card';
+                if (currentDataset === dataset.name) card.classList.add('active');
+
+                card.innerHTML = `
+                    <strong>${dataset.name}</strong>
+                    <div class="dataset-info">
+                        ${dataset.rows} rows × ${dataset.columns} cols
+                        <br>${dataset.memory_mb} MB
+                    </div>
+                `;
+                card.onclick = () => selectDataset(dataset.name);
+                container.appendChild(card);
+            });
+        }
+
+        async function selectDataset(name) {
+            currentDataset = name;
+            loadDatasets(); // Refresh to show active state
+
+            // Load dataset preview
+            const response = await fetch(`/api/data/dataset/${name}`);
+            const data = await response.json();
+
+            document.getElementById('datasetTitle').textContent = name;
+            document.getElementById('statsPanel').style.display = 'block';
+
+            // Show stats
+            const statGrid = document.getElementById('statGrid');
+            statGrid.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-value">${data.rows}</div>
+                    <div class="stat-label">Rows</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${data.columns}</div>
+                    <div class="stat-label">Columns</div>
+                </div>
+            `;
+
+            // Show table
+            displayDataTable(data.preview, Object.keys(data.column_types));
+        }
+
+        function displayDataTable(data, columns) {
+            const container = document.getElementById('dataTableContent');
+
+            if (!data || data.length === 0) {
+                container.innerHTML = '<p class="loading">No data to display</p>';
+                return;
+            }
+
+            let html = '<table class="data-table"><thead><tr>';
+            columns.forEach(col => {
+                html += `<th>${col}</th>`;
+            });
+            html += '</tr></thead><tbody>';
+
+            data.forEach(row => {
+                html += '<tr>';
+                columns.forEach(col => {
+                    html += `<td>${row[col] !== null ? row[col] : '<em>null</em>'}</td>`;
+                });
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        async function runQuery() {
+            if (!currentDataset) {
+                alert('Please select a dataset first');
+                return;
+            }
+
+            const query = document.getElementById('queryInput').value;
+            if (!query) return;
+
+            try {
+                const response = await fetch('/api/data/query', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        dataset_name: currentDataset,
+                        query: query
+                    })
+                });
+
+                const result = await response.json();
+                const container = document.getElementById('queryResults');
+
+                if (result.success) {
+                    container.innerHTML = `<h4>Results: ${result.rows_returned} rows</h4>`;
+                    const columns = result.data.length > 0 ? Object.keys(result.data[0]) : [];
+                    displayDataTable(result.data, columns);
+                } else {
+                    container.innerHTML = `<p style="color: red;">Error: ${result.error}</p>`;
+                }
+            } catch (error) {
+                alert('Query error: ' + error);
+            }
+        }
+
+        async function getAIInsights() {
+            if (!currentDataset) {
+                alert('Please select a dataset first');
+                return;
+            }
+
+            const container = document.getElementById('insightsContent');
+            container.innerHTML = '<p class="loading">🤖 JARCORE is analyzing your data...</p>';
+
+            try {
+                const response = await fetch(`/api/data/ai-insights/${currentDataset}`, {
+                    method: 'POST'
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    container.innerHTML = `
+                        <h4>💡 Insights</h4>
+                        <p>${result.insights}</p>
+
+                        <h4 style="margin-top: 20px;">📝 Suggested Analysis Code</h4>
+                        <pre class="code-cell">${result.suggested_code}</pre>
+                    `;
+                } else {
+                    container.innerHTML = `<p style="color: red;">Error: ${result.error}</p>`;
+                }
+            } catch (error) {
+                container.innerHTML = `<p style="color: red;">Error: ${error}</p>`;
+            }
+        }
+
+        async function loadNotebooks() {
+            const response = await fetch('/api/notebook/list');
+            const data = await response.json();
+
+            const container = document.getElementById('notebooksList');
+            container.innerHTML = '';
+
+            if (data.notebooks.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.9em;">No notebooks</p>';
+                return;
+            }
+
+            data.notebooks.forEach(nb => {
+                const card = document.createElement('div');
+                card.className = 'dataset-card';
+                card.innerHTML = `<strong>${nb.name}</strong><div class="dataset-info">${nb.cells} cells</div>`;
+                card.onclick = () => selectNotebook(nb.name);
+                container.appendChild(card);
+            });
+        }
+
+        async function createNotebook() {
+            const name = prompt('Notebook name:');
+            if (!name) return;
+
+            const response = await fetch('/api/notebook/create', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({name: name, title: name})
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                alert('Notebook created!');
+                loadNotebooks();
+            } else {
+                alert('Error: ' + result.error);
+            }
+        }
+
+        async function selectNotebook(name) {
+            // TODO: Load and display notebook
+            alert('Notebook viewer coming soon!');
+        }
+
+        function switchTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            // Show selected tab
+            document.getElementById(tabName + 'Tab').classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        function refreshData() {
+            if (currentDataset) {
+                selectDataset(currentDataset);
+            }
+        }
+    </script>
+</body>
+</html>

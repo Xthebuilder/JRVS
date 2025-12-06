@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/home/xmanz"],
+      "description": "File system access to /home/xmanz"
+    },
+    "memory": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-memory"],
+      "description": "Persistent memory/notes storage"
+    },
+    "jrvs": {
+      "command": "python3",
+      "args": ["/home/xmanz/JRVS/mcp/server.py"],
+      "description": "JRVS MCP Server (RAG, Calendar, JARCORE, etc.)"
+    }
+  }
+}
