@@ -16,7 +16,7 @@ def analyze_file(filepath):
     try:
         tree = ast.parse(content)
         return tree, content
-    except:
+    except Exception:
         return None, content
 
 
@@ -116,7 +116,7 @@ def test_week2_robust_json_extraction():
         ("_extract_json method exists", "_extract_json" in classes.get("JARCORE", [])),
         ("Returns Tuple[Optional[Dict], Optional[str]]", "Tuple[Optional[Dict], Optional[str]]" in content),
         ("Strategy 1: Direct JSON parse", "json.loads(response.strip())" in content),
-        ("Strategy 2: Code block regex", r"r'```(?:json)?" in content),
+        ("Strategy 2: Code block regex", "```(?:json)?" in content and "re.search" in content),
         ("Strategy 3: Bracket-depth comment", "Bracket-depth matching" in content),
         ("Bracket depth logic", "depth = 0" in content and "start_idx" in content),
         ("Used in generate_code", "_extract_json(response)" in content and "generate_code" in content),

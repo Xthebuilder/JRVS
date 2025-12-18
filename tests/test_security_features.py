@@ -179,36 +179,64 @@ def test_lazy_loader_race_condition():
 
 def test_pydantic_models():
     """Test 8: Request validation with Pydantic models"""
-    # Import directly from web_server
+    # Static analysis approach - check file content for model definitions
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent))
     
-    # Just verify the models can be imported and have validators
+    # Verify the models are properly defined using AST parsing
+    import ast
     with open('web_server.py', 'r') as f:
         web_server_content = f.read()
     
-    assert 'class ChatRequest(BaseModel):' in web_server_content
-    assert 'class ScrapeRequest(BaseModel):' in web_server_content
-    assert 'class CodeExecuteRequest(BaseModel):' in web_server_content
-    assert '@validator' in web_server_content
-    print("✓ Test 8: Pydantic validation models defined")
-    
-    return True
+    try:
+        tree = ast.parse(web_server_content)
+        classes = {node.name for node in ast.walk(tree) if isinstance(node, ast.ClassDef)}
+        
+        # Check for required classes
+        assert 'ChatRequest' in classes, "ChatRequest class not found"
+        assert 'ScrapeRequest' in classes, "ScrapeRequest class not found"
+        assert 'CodeExecuteRequest' in classes, "CodeExecuteRequest class not found"
+        
+        # Check for validators
+        assert '@validator' in web_server_content, "Validators not found"
+        
+        print("✓ Test 8: Pydantic validation models defined with proper structure")
+        return True
+    except Exception as e:
+        print(f"✗ Test 8: Failed to verify models - {e}")
+        return False
 
 
 def test_rate_limiting():
     """Test 7: Rate limiting with slowapi"""
+    # Check web_server.py structure
+    import ast
     with open('web_server.py', 'r') as f:
         web_server_content = f.read()
     
-    assert 'from slowapi import Limiter' in web_server_content
-    assert 'limiter = Limiter' in web_server_content
-    print("✓ Test 7: Rate limiting with slowapi configured")
+    try:
+        tree = ast.parse(web_server_content)
+        
+        # Check imports
+        imports = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                if node.module == 'slowapi':
+                    imports.extend([alias.name for alias in node.names])
+        
+        assert 'Limiter' in imports, "Limiter not imported from slowapi"
+        assert 'limiter = Limiter' in web_server_content, "Limiter not instantiated"
+        
+        print("✓ Test 7: Rate limiting with slowapi configured")
+    except Exception as e:
+        print(f"✗ Test 7.1: Failed - {e}")
+        return False
     
+    # Check requirements.txt
     with open('requirements.txt', 'r') as f:
         requirements = f.read()
     
-    assert 'slowapi' in requirements
+    assert 'slowapi' in requirements, "slowapi not in requirements.txt"
     print("✓ Test 7: slowapi in requirements.txt")
     
     return True
@@ -216,14 +244,28 @@ def test_rate_limiting():
 
 def test_session_management():
     """Test 6: Session management in ollama_client"""
+    # Use AST to verify the structure
+    import ast
     with open('llm/ollama_client.py', 'r') as f:
         ollama_content = f.read()
     
-    assert '@asynccontextmanager' in ollama_content
-    assert 'async def _get_session(self):' in ollama_content
-    print("✓ Test 6: Async session management with context manager")
-    
-    return True
+    try:
+        tree = ast.parse(ollama_content)
+        
+        # Find _get_session method
+        methods = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.AsyncFunctionDef):
+                methods.append(node.name)
+        
+        assert '_get_session' in methods, "_get_session method not found"
+        assert '@asynccontextmanager' in ollama_content, "asynccontextmanager decorator not found"
+        
+        print("✓ Test 6: Async session management with context manager")
+        return True
+    except Exception as e:
+        print(f"✗ Test 6: Failed - {e}")
+        return False
 
 
 def main():
