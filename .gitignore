@@ -30,6 +30,13 @@ env/
 
 # testing
 /coverage
+.coverage
+.pytest_cache/
+htmlcov/
+.tox/
+*.cover
+coverage.xml
+*.log
 
 # next.js
 /.next/
