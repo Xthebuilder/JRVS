@@ -31,8 +31,11 @@ pip install pytest pytest-asyncio pytest-cov pytest-timeout pytest-mock
 ### Run All Tests
 
 ```bash
-# Run all tests with coverage
+# Run all tests (fast, no coverage)
 pytest
+
+# Run all tests with coverage
+pytest --cov=core --cov=llm --cov=rag --cov=scraper --cov=api --cov=cli
 
 # Run tests verbosely
 pytest -v
