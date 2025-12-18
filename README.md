@@ -1,7 +1,7 @@
 # Jarvis AI Agent 🤖
 
 A sophisticated AI Interface that combines Local or API LLM responses with RAG (Retrieval-Augmented Generation) capabilities, featuring web scraping, vector search, and intelligent context injection.
-JRVS: A privacy-first, local-friendly AI agent with built-in RAG and protocol tool support optimized for developers and builders
+A privacy-first, local-friendly AI agent with built-in RAG and protocol tool support optimized for developers and builders
 ## 🏢 Enterprise & Hosted Solutions
 
 **Need AI tools but can't use ChatGPT due to compliance?**
