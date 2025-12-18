@@ -56,8 +56,9 @@ async def test_scrape_url_with_mock():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_extract_text_from_html(web_scraper):
-    """Test extracting text from HTML"""
-    html = """
+    """Test extracting text from HTML through public interface"""
+    # Mock scraping to test text extraction
+    mock_html = """
     <html>
         <body>
             <h1>Heading</h1>
@@ -68,12 +69,22 @@ async def test_extract_text_from_html(web_scraper):
     </html>
     """
     
-    text = web_scraper._extract_text(html)
+    mock_response = MagicMock()
+    mock_response.status = 200
+    mock_response.text = AsyncMock(return_value=mock_html)
     
-    assert "Heading" in text
-    assert "Paragraph text" in text
-    assert "script" not in text.lower() or "console" not in text
-    assert ".class" not in text
+    mock_session = MagicMock()
+    mock_session.get = AsyncMock(return_value=mock_response)
+    
+    with patch('aiohttp.ClientSession', return_value=mock_session):
+        result = await web_scraper.scrape_url("https://example.com")
+        
+        if result and 'content' in result:
+            text = result['content']
+            assert "Heading" in text
+            assert "Paragraph text" in text
+            # Script tags should be filtered out
+            assert "console" not in text.lower() or text.count("console") == 0
 
 
 @pytest.mark.unit

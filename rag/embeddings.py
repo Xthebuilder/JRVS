@@ -179,7 +179,7 @@ class EmbeddingManager:
     # Aliases for compatibility
     async def generate_embedding(self, text: str) -> List[float]:
         """Generate embedding for a single text (compatibility method)"""
-        embeddings = await self.encode_text(text)
+        embeddings = await self.encode_text([text])  # Pass as list
         return embeddings[0].tolist() if len(embeddings) > 0 else []
     
     async def generate_embeddings(self, texts: List[str]) -> List[List[float]]:

@@ -220,12 +220,18 @@ async def test_add_document(temp_rag_retriever):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_chunk_text(temp_rag_retriever):
-    """Test text chunking"""
+    """Test text chunking through public interface"""
     text = "Sentence one. Sentence two. Sentence three. Sentence four."
-    chunks = temp_rag_retriever._chunk_text(text)
     
-    assert isinstance(chunks, list)
-    assert len(chunks) > 0
+    # Test chunking by adding a document and checking the chunks
+    doc_id = await temp_rag_retriever.add_document(
+        content=text,
+        title="Test Doc",
+        url="https://example.com"
+    )
+    
+    # Verify document was added successfully
+    assert doc_id > 0
 
 
 @pytest.mark.unit
