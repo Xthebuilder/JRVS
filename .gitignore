@@ -30,6 +30,13 @@ env/
 
 # testing
 /coverage
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+.pytest_cache/
+.tox/
 
 # next.js
 /.next/
@@ -57,3 +64,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# JRVS data files
+data/
+*.db
+*.index
+*.map
+faiss_index.*

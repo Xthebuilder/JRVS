@@ -5,7 +5,7 @@ Unit tests for CLI modules
 import pytest
 from unittest.mock import MagicMock, patch
 
-from cli.themes import Theme, ThemeManager
+from cli.themes import ThemeManager
 
 
 @pytest.mark.unit
@@ -13,44 +13,37 @@ def test_theme_manager_initialization():
     """Test theme manager initialization"""
     manager = ThemeManager()
     assert manager is not None
-    assert len(manager.themes) > 0
+    assert manager.current_theme is not None
 
 
 @pytest.mark.unit
-def test_get_theme():
-    """Test getting a theme"""
+def test_get_color():
+    """Test getting a color from theme"""
     manager = ThemeManager()
-    theme = manager.get_theme("matrix")
+    color = manager.get_color("primary")
     
-    assert theme is not None
-    assert isinstance(theme, dict) or hasattr(theme, 'primary')
+    assert color is not None
+    assert isinstance(color, str)
 
 
 @pytest.mark.unit
-def test_get_theme_default():
-    """Test getting default theme for invalid name"""
+def test_set_theme():
+    """Test setting a theme"""
     manager = ThemeManager()
-    theme = manager.get_theme("nonexistent_theme")
     
-    # Should return a default theme
-    assert theme is not None
+    # Try to set a theme (if themes exist)
+    from config import THEMES
+    if THEMES:
+        theme_name = list(THEMES.keys())[0]
+        result = manager.set_theme(theme_name)
+        assert result is True
 
 
 @pytest.mark.unit
-def test_list_themes():
-    """Test listing available themes"""
+def test_set_invalid_theme():
+    """Test setting an invalid theme"""
     manager = ThemeManager()
-    themes = manager.list_themes()
+    result = manager.set_theme("nonexistent_theme")
     
-    assert isinstance(themes, list)
-    assert len(themes) > 0
+    assert result is False
 
-
-@pytest.mark.unit
-def test_theme_colors():
-    """Test theme colors are valid"""
-    manager = ThemeManager()
-    
-    for theme_name in manager.list_themes():
-        theme = manager.get_theme(theme_name)
-        assert theme is not None
