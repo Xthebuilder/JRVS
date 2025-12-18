@@ -1,4 +1,4 @@
-JRVS
+
 JRVS is a local-first AI agent framework designed for developers who want control, extensibility, and predictable behavior when working with local language models and tools.
 JRVS prioritizes clear architectural boundaries, low operational overhead, and explicit tradeoffs over opaque abstraction or cloud dependency.
 Why JRVS Exists
