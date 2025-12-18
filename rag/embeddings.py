@@ -154,6 +154,38 @@ class EmbeddingManager:
     def get_cache_size(self) -> int:
         """Get current cache size"""
         return len(self._embedding_cache)
+    
+    async def cleanup(self):
+        """Cleanup resources to prevent memory leaks"""
+        self.clear_cache()
+        
+        # Clear model to free GPU/CPU memory
+        if self._model is not None:
+            del self._model
+            self._model = None
+        
+        # Clear CUDA cache if using GPU
+        if self._device == 'cuda' and torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    
+    # Context manager support for proper resource cleanup
+    async def __aenter__(self):
+        await self.initialize()
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.cleanup()
+
+    # Aliases for compatibility
+    async def generate_embedding(self, text: str) -> List[float]:
+        """Generate embedding for a single text (compatibility method)"""
+        embeddings = await self.encode_text(text)
+        return embeddings[0].tolist() if len(embeddings) > 0 else []
+    
+    async def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
+        """Generate embeddings for multiple texts (compatibility method)"""
+        embeddings = await self.encode_text(texts)
+        return [emb.tolist() for emb in embeddings]
 
 # Global embedding manager
 embedding_manager = EmbeddingManager()

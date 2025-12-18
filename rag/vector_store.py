@@ -264,9 +264,30 @@ class VectorStore:
         print(f"Removed document {document_id} and rebuilt index")
 
     async def cleanup(self):
-        """Save index on cleanup"""
+        """Cleanup resources to prevent memory leaks"""
         if self.index:
             await self._save_index()
+            # Clear index to free memory
+            del self.index
+            self.index = None
+        
+        # Clear document map
+        self.document_map.clear()
+        
+        self.is_initialized = False
+    
+    # Context manager support for proper resource cleanup
+    async def __aenter__(self):
+        await self.initialize()
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.cleanup()
+    
+    @property
+    def initialized(self):
+        """Compatibility property"""
+        return self.is_initialized
 
 # Global vector store instance
 vector_store = VectorStore()

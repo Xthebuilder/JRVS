@@ -1,0 +1,34 @@
+[run]
+source = .
+omit =
+    */tests/*
+    */venv/*
+    */env/*
+    */.venv/*
+    */site-packages/*
+    */dist-packages/*
+    setup.py
+    */migrations/*
+    */node_modules/*
+    */static/*
+    */public/*
+    */app/*
+    */lib/*
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise AssertionError
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+    @abstractmethod
+    @abc.abstractmethod
+    pass
+
+precision = 2
+show_missing = True
+
+[html]
+directory = htmlcov
