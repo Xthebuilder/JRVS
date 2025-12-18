@@ -7,6 +7,7 @@ Tests all 9 security fixes from PR #24.
 import sys
 import json
 import tempfile
+import traceback
 from pathlib import Path
 
 # Add project root to path
@@ -185,10 +186,10 @@ def test_pydantic_models():
     
     # Verify the models are properly defined using AST parsing
     import ast
-    with open('web_server.py', 'r') as f:
-        web_server_content = f.read()
-    
     try:
+        with open('web_server.py', 'r') as f:
+            web_server_content = f.read()
+        
         tree = ast.parse(web_server_content)
         classes = {node.name for node in ast.walk(tree) if isinstance(node, ast.ClassDef)}
         
@@ -202,7 +203,7 @@ def test_pydantic_models():
         
         print("✓ Test 8: Pydantic validation models defined with proper structure")
         return True
-    except Exception as e:
+    except (FileNotFoundError, SyntaxError, AssertionError) as e:
         print(f"✗ Test 8: Failed to verify models - {e}")
         return False
 
@@ -301,7 +302,6 @@ def main():
         except Exception as e:
             failed += 1
             print(f"✗ {name} FAILED with exception: {e}")
-            import traceback
             traceback.print_exc()
     
     print("\n" + "=" * 70)

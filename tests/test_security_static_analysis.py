@@ -6,18 +6,20 @@ Tests all 9 security fixes from PR #24 without requiring dependencies.
 
 import ast
 import re
+import traceback
 from pathlib import Path
 
 
 def analyze_file(filepath):
     """Parse Python file and return AST + content"""
-    with open(filepath, 'r') as f:
-        content = f.read()
     try:
+        with open(filepath, 'r') as f:
+            content = f.read()
         tree = ast.parse(content)
         return tree, content
-    except Exception:
-        return None, content
+    except (SyntaxError, UnicodeDecodeError, FileNotFoundError) as e:
+        print(f"Warning: Could not parse {filepath}: {e}")
+        return None, ""
 
 
 def get_classes_and_methods(tree):
@@ -269,7 +271,6 @@ def main():
             total_tests += total
         except Exception as e:
             print(f"✗ {name} FAILED with exception: {e}")
-            import traceback
             traceback.print_exc()
     
     print("\n" + "=" * 70)
