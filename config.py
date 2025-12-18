@@ -7,6 +7,9 @@ BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "data"
 MODELS_DIR = DATA_DIR / "models"
 
+# JARCORE workspace settings
+JARCORE_WORKSPACE = Path(os.environ.get("JARCORE_WORKSPACE", Path.cwd()))
+
 # Ensure directories exist
 DATA_DIR.mkdir(exist_ok=True)
 MODELS_DIR.mkdir(exist_ok=True)

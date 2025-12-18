@@ -18,13 +18,21 @@ class LazyLoader(Generic[T]):
         self._loaded_at = None
         self._loading = False
         self._lock = asyncio.Lock()
+        self._load_complete = asyncio.Event()
 
     async def get(self) -> T:
         """Get the resource, loading if necessary"""
+        # If already loading, wait for completion
+        if self._loading:
+            await self._load_complete.wait()
+            return self._resource
+            
         async with self._lock:
             # Check if resource is expired
             if self._should_reload():
+                self._load_complete.clear()
                 await self._load()
+                self._load_complete.set()
             
             return self._resource
 

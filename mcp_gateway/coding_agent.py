@@ -18,13 +18,42 @@ import ast
 import json
 import asyncio
 import subprocess
+import re
+import resource
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass
 from datetime import datetime
+from collections import deque
 
 from llm.ollama_client import ollama_client
 from rag.retriever import rag_retriever
+
+
+class SecurityError(Exception):
+    """Raised when a security violation is detected"""
+    pass
+
+
+class SafeExecutor:
+    """Sandboxed code execution with resource limits"""
+    
+    MAX_CPU_TIME = 30  # seconds
+    MAX_MEMORY = 256 * 1024 * 1024  # 256MB
+    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+    MAX_PROCESSES = 0  # No subprocess spawning
+    
+    @staticmethod
+    def set_resource_limits():
+        """Set resource limits for child process"""
+        try:
+            resource.setrlimit(resource.RLIMIT_CPU, (SafeExecutor.MAX_CPU_TIME, SafeExecutor.MAX_CPU_TIME))
+            resource.setrlimit(resource.RLIMIT_AS, (SafeExecutor.MAX_MEMORY, SafeExecutor.MAX_MEMORY))
+            resource.setrlimit(resource.RLIMIT_FSIZE, (SafeExecutor.MAX_FILE_SIZE, SafeExecutor.MAX_FILE_SIZE))
+            resource.setrlimit(resource.RLIMIT_NPROC, (SafeExecutor.MAX_PROCESSES, SafeExecutor.MAX_PROCESSES))
+        except (ValueError, OSError) as e:
+            # Resource limits may not be available on all platforms (e.g., Windows)
+            print(f"Warning: Could not set resource limits: {e}")
 
 
 @dataclass
@@ -42,9 +71,10 @@ class CodeEditOperation:
 class JARCORE:
     """JARVIS Autonomous Reasoning & Coding Engine"""
 
-    def __init__(self, workspace_root: str = "/home/xmanz/JRVS"):
-        self.workspace_root = Path(workspace_root)
-        self.edit_history: List[CodeEditOperation] = []
+    def __init__(self, workspace_root: str = None, max_history: int = 1000):
+        from config import JARCORE_WORKSPACE
+        self.workspace_root = Path(workspace_root) if workspace_root else JARCORE_WORKSPACE
+        self.edit_history: deque = deque(maxlen=max_history)
         self.supported_languages = {
             ".py": "python",
             ".js": "javascript",
@@ -62,6 +92,68 @@ class JARCORE:
             ".yaml": "yaml",
             ".yml": "yaml"
         }
+
+    def _validate_path(self, file_path: str) -> Path:
+        """Validate file path is within workspace and safe"""
+        # Resolve to absolute path
+        if not Path(file_path).is_absolute():
+            full_path = (self.workspace_root / file_path).resolve()
+        else:
+            full_path = Path(file_path).resolve()
+        
+        # Check path is within workspace
+        try:
+            full_path.relative_to(self.workspace_root.resolve())
+        except ValueError:
+            raise SecurityError(f"Path traversal detected: {file_path} resolves outside workspace")
+        
+        # Block sensitive files
+        sensitive_patterns = ['.env', '.git/config', 'credentials', 'secrets', '.ssh']
+        for pattern in sensitive_patterns:
+            if pattern in str(full_path).lower():
+                raise SecurityError(f"Access to sensitive file blocked: {file_path}")
+        
+        return full_path
+
+    def _extract_json(self, response: str) -> Tuple[Optional[Dict], Optional[str]]:
+        """
+        Robustly extract JSON from LLM response.
+        Returns (parsed_dict, error_message)
+        """
+        if not response:
+            return None, "Empty response"
+        
+        # Strategy 1: Direct parse
+        try:
+            return json.loads(response.strip()), None
+        except json.JSONDecodeError:
+            pass
+        
+        # Strategy 2: Extract from code block
+        code_block_match = re.search(r'```(?:json)?\s*(\{[\s\S]*?\})\s*```', response)
+        if code_block_match:
+            try:
+                return json.loads(code_block_match.group(1)), None
+            except json.JSONDecodeError:
+                pass
+        
+        # Strategy 3: Bracket-depth matching
+        depth = 0
+        start_idx = None
+        for i, char in enumerate(response):
+            if char == '{':
+                if depth == 0:
+                    start_idx = i
+                depth += 1
+            elif char == '}':
+                depth -= 1
+                if depth == 0 and start_idx is not None:
+                    try:
+                        return json.loads(response[start_idx:i+1]), None
+                    except json.JSONDecodeError:
+                        continue
+        
+        return None, "Could not extract valid JSON from response"
 
     async def generate_code(
         self,
@@ -125,17 +217,15 @@ Generate the code following best practices for {language}."""
             )
 
             # Extract JSON from response
-            json_start = response.find('{')
-            json_end = response.rfind('}') + 1
-            if json_start >= 0 and json_end > json_start:
-                result = json.loads(response[json_start:json_end])
+            result, error = self._extract_json(response)
+            if result:
                 result["language"] = language
                 result["task"] = task
                 result["timestamp"] = datetime.now().isoformat()
                 return result
             else:
                 return {
-                    "error": "Could not parse AI response",
+                    "error": error or "Could not parse AI response",
                     "raw_response": response
                 }
 
@@ -209,17 +299,15 @@ Provide {analysis_type} analysis."""
                 stream=False
             )
 
-            json_start = response.find('{')
-            json_end = response.rfind('}') + 1
-            if json_start >= 0 and json_end > json_start:
-                result = json.loads(response[json_start:json_end])
-                result["language"] = language
-                result["analysis_type"] = analysis_type
-                result["timestamp"] = datetime.now().isoformat()
-                return result
+            json_result, error = self._extract_json(response)
+            if json_result:
+                json_result["language"] = language
+                json_result["analysis_type"] = analysis_type
+                json_result["timestamp"] = datetime.now().isoformat()
+                return json_result
             else:
                 return {
-                    "error": "Could not parse analysis",
+                    "error": error or "Could not parse analysis",
                     "raw_response": response
                 }
 
@@ -280,17 +368,15 @@ Goal: {refactor_goal}"""
                 stream=False
             )
 
-            json_start = response.find('{')
-            json_end = response.rfind('}') + 1
-            if json_start >= 0 and json_end > json_start:
-                result = json.loads(response[json_start:json_end])
-                result["original_code"] = code
-                result["language"] = language
-                result["timestamp"] = datetime.now().isoformat()
-                return result
+            json_result, error = self._extract_json(response)
+            if json_result:
+                json_result["original_code"] = code
+                json_result["language"] = language
+                json_result["timestamp"] = datetime.now().isoformat()
+                return json_result
             else:
                 return {
-                    "error": "Could not parse refactoring result",
+                    "error": error or "Could not parse refactoring result",
                     "raw_response": response
                 }
 
@@ -395,18 +481,16 @@ Error message:
                 stream=False
             )
 
-            json_start = response.find('{')
-            json_end = response.rfind('}') + 1
-            if json_start >= 0 and json_end > json_start:
-                result = json.loads(response[json_start:json_end])
-                result["original_code"] = code
-                result["original_error"] = error_message
-                result["language"] = language
-                result["timestamp"] = datetime.now().isoformat()
-                return result
+            json_result, error = self._extract_json(response)
+            if json_result:
+                json_result["original_code"] = code
+                json_result["original_error"] = error_message
+                json_result["language"] = language
+                json_result["timestamp"] = datetime.now().isoformat()
+                return json_result
             else:
                 return {
-                    "error": "Could not parse fix result",
+                    "error": error or "Could not parse fix result",
                     "raw_response": response
                 }
 
@@ -427,11 +511,8 @@ Error message:
             File content, language, and metadata
         """
         try:
-            # Resolve path
-            if not Path(file_path).is_absolute():
-                full_path = self.workspace_root / file_path
-            else:
-                full_path = Path(file_path)
+            # Validate and resolve path
+            full_path = self._validate_path(file_path)
 
             if not full_path.exists():
                 return {
@@ -488,18 +569,16 @@ Error message:
             Write operation result
         """
         try:
-            # Resolve path
-            if not Path(file_path).is_absolute():
-                full_path = self.workspace_root / file_path
-            else:
-                full_path = Path(file_path)
+            # Validate and resolve path
+            full_path = self._validate_path(file_path)
 
             # Create parent directories
             if create_dirs:
                 full_path.parent.mkdir(parents=True, exist_ok=True)
 
             # Backup existing file
-            if backup and full_path.exists():
+            file_existed = full_path.exists()
+            if backup and file_existed:
                 backup_path = full_path.with_suffix(full_path.suffix + '.backup')
                 import shutil
                 shutil.copy2(full_path, backup_path)
@@ -511,7 +590,7 @@ Error message:
             # Log operation
             operation = CodeEditOperation(
                 file_path=str(full_path),
-                operation="create" if not full_path.exists() else "edit",
+                operation="create" if not file_existed else "edit",
                 content=content,
                 line_start=None,
                 line_end=None,
@@ -576,11 +655,17 @@ Error message:
         try:
             start_time = datetime.now()
 
+            # On Unix-like systems, use resource limits
+            preexec_fn = None
+            if hasattr(os, 'fork'):  # Unix-like systems
+                preexec_fn = SafeExecutor.set_resource_limits
+
             result = subprocess.run(
                 cmd,
                 capture_output=capture_output,
                 text=True,
-                timeout=timeout
+                timeout=timeout,
+                preexec_fn=preexec_fn
             )
 
             duration = (datetime.now() - start_time).total_seconds()
@@ -682,17 +767,15 @@ Use {framework} framework."""
                 stream=False
             )
 
-            json_start = response.find('{')
-            json_end = response.rfind('}') + 1
-            if json_start >= 0 and json_end > json_start:
-                result = json.loads(response[json_start:json_end])
-                result["language"] = language
-                result["framework"] = framework
-                result["timestamp"] = datetime.now().isoformat()
-                return result
+            json_result, error = self._extract_json(response)
+            if json_result:
+                json_result["language"] = language
+                json_result["framework"] = framework
+                json_result["timestamp"] = datetime.now().isoformat()
+                return json_result
             else:
                 return {
-                    "error": "Could not parse test generation result",
+                    "error": error or "Could not parse test generation result",
                     "raw_response": response
                 }
 

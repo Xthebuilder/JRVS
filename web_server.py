@@ -15,10 +15,15 @@ from typing import Optional, List, Dict
 from pathlib import Path
 import subprocess
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Form
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Form, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, validator, Field
+from urllib.parse import urlparse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 import uvicorn
 
 # JRVS imports
@@ -31,6 +36,51 @@ from mcp_gateway.agent import mcp_agent
 from scraper.web_scraper import web_scraper
 from data_analysis.analyzer import data_analyzer
 from mcp_gateway.coding_agent import jarcore
+
+
+# ============================================================================
+# Request Validation Models
+# ============================================================================
+
+class ChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=10000)
+    session_id: Optional[str] = Field(None, max_length=100)
+    
+    @validator('message')
+    def sanitize_message(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Message cannot be empty')
+        return v.strip()
+
+
+class ScrapeRequest(BaseModel):
+    url: str = Field(..., max_length=2000)
+    
+    @validator('url')
+    def validate_url(cls, v):
+        parsed = urlparse(v)
+        if parsed.scheme not in ('http', 'https'):
+            raise ValueError('URL must use http or https')
+        if not parsed.netloc:
+            raise ValueError('Invalid URL')
+        # Block internal IPs
+        blocked = ['localhost', '127.0.0.1', '0.0.0.0', '169.254', '10.', '172.16', '192.168']
+        if any(b in parsed.netloc for b in blocked):
+            raise ValueError('Internal URLs not allowed')
+        return v
+
+
+class CodeExecuteRequest(BaseModel):
+    code: str = Field(..., min_length=1, max_length=50000)
+    language: str = Field(..., pattern='^(python|bash|javascript)$')
+    timeout: int = Field(default=30, ge=1, le=60)
+
+
+# ============================================================================
+# Rate Limiter Setup
+# ============================================================================
+
+limiter = Limiter(key_func=get_remote_address)
 
 
 def get_tailscale_ip() -> str:
@@ -87,6 +137,10 @@ app = FastAPI(
     description="Intelligent AI assistant on your Tailscale network",
     lifespan=lifespan
 )
+
+# Add rate limiter to app
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -401,7 +455,8 @@ async def data_analysis_page():
 
 
 @app.get("/api/status")
-async def get_status():
+@limiter.limit("60/minute")
+async def get_status(request: Request):
     """Get JRVS status"""
     servers = await mcp_client.list_servers()
     models = await ollama_client.list_models()
@@ -489,27 +544,31 @@ async def list_mcp_tools(server: Optional[str] = None):
 # ============================================================================
 
 @app.post("/api/data/upload/csv")
-async def upload_csv(file_path: str, name: Optional[str] = None):
+@limiter.limit("10/minute")
+async def upload_csv(request: Request, file_path: str, name: Optional[str] = None):
     """Upload and analyze CSV file"""
     result = await data_analyzer.load_csv(file_path, name)
     return result
 
 
 @app.post("/api/data/upload/excel")
-async def upload_excel(file_path: str, sheet_name: Optional[str] = None, name: Optional[str] = None):
+@limiter.limit("10/minute")
+async def upload_excel(request: Request, file_path: str, sheet_name: Optional[str] = None, name: Optional[str] = None):
     """Upload and analyze Excel file"""
     result = await data_analyzer.load_excel(file_path, sheet_name, name)
     return result
 
 
 @app.get("/api/data/datasets")
-async def list_datasets():
+@limiter.limit("60/minute")
+async def list_datasets(request: Request):
     """List all loaded datasets"""
     return data_analyzer.list_datasets()
 
 
 @app.get("/api/data/dataset/{dataset_name}")
-async def get_dataset_info(dataset_name: str):
+@limiter.limit("30/minute")
+async def get_dataset_info(request: Request, dataset_name: str):
     """Get information about a specific dataset"""
     if dataset_name not in data_analyzer.loaded_datasets:
         raise HTTPException(status_code=404, detail="Dataset not found")
@@ -525,21 +584,24 @@ async def get_dataset_info(dataset_name: str):
 
 
 @app.post("/api/data/query")
-async def query_dataset(dataset_name: str, query: str):
+@limiter.limit("20/minute")
+async def query_dataset(request: Request, dataset_name: str, query: str):
     """Execute query on dataset"""
     result = await data_analyzer.query_data(dataset_name, query)
     return result
 
 
 @app.get("/api/data/column/{dataset_name}/{column_name}")
-async def get_column_stats(dataset_name: str, column_name: str):
+@limiter.limit("30/minute")
+async def get_column_stats(request: Request, dataset_name: str, column_name: str):
     """Get statistics for a specific column"""
     result = await data_analyzer.get_column_stats(dataset_name, column_name)
     return result
 
 
 @app.post("/api/data/ai-insights/{dataset_name}")
-async def get_ai_insights(dataset_name: str):
+@limiter.limit("5/minute")
+async def get_ai_insights(request: Request, dataset_name: str):
     """Get AI-powered insights about the dataset using JARCORE"""
     result = await data_analyzer.get_ai_insights(dataset_name, jarcore)
     return result

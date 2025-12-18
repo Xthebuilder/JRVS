@@ -21,18 +21,25 @@ class OllamaClient:
 
     @asynccontextmanager
     async def _get_session(self):
-        """Get or create HTTP session with timeout"""
+        """Get or create HTTP session with proper error handling"""
         if self.session is None or self.session.closed:
             timeout = aiohttp.ClientTimeout(total=TIMEOUTS["ollama_response"])
             self.session = aiohttp.ClientSession(timeout=timeout)
         
         try:
             yield self.session
-        except Exception as e:
+        except aiohttp.ClientConnectorError as e:
+            # Only close session on connection-level errors
             if self.session and not self.session.closed:
                 await self.session.close()
             self.session = None
-            raise e
+            raise
+        except asyncio.TimeoutError:
+            # Don't close session on timeout - it's still valid
+            raise
+        except Exception as e:
+            # For other exceptions, keep session open
+            raise
 
     async def _check_ollama_connection(self) -> bool:
         """Check if Ollama is running and accessible"""
