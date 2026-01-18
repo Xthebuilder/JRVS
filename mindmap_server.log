@@ -1,0 +1,40 @@
+nohup: ignoring input
+/home/xavier/JRVS-main/mindmap_server.py:81: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+  @app.on_event("startup")
+INFO:     Started server process [2125]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
+
+╔═══════════════════════════════════════════════════════════╗
+║           JRVS Mind Map Server (Standalone)               ║
+╠═══════════════════════════════════════════════════════════╣
+║                                                           ║
+║  🧠 Mind Map visualization server                        ║
+║                                                           ║
+║  URL: http://localhost:8080/mindmap                       ║
+║                                                           ║
+║  This is a standalone server for testing the Mind Map    ║
+║  visualization. For full functionality (LLM-powered      ║
+║  topic extraction), use the main JRVS server.            ║
+║                                                           ║
+╚═══════════════════════════════════════════════════════════╝
+    
+🧠 Initializing Mind Map server...
+✓ Mind Map tables ready
+✓ Server running at http://localhost:8080
+✓ Mind Map UI: http://localhost:8080/mindmap
+INFO:     127.0.0.1:41798 - "GET /api/mindmap/graph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35160 - "GET /mindmap?id=07adfdce-f3c3-4a3e-a0d5-a0c8fc907234&vscodeBrowserReqId=1768703114537 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35160 - "GET /static/css/mindmap.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35164 - "GET /static/js/mindmap.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35164 - "GET /api/mindmap/graph?time_range=all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35164 - "GET /api/mindmap/topic/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35164 - "GET /api/mindmap/topic/7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53540 - "POST /api/mindmap/build HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53540 - "GET /api/mindmap/graph?time_range=all HTTP/1.1" 200 OK

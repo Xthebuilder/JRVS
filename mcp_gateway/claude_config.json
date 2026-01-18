@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "jrvs": {
+      "command": "python",
+      "args": [
+        "/home/xmanz/JRVS/mcp/server.py"
+      ],
+      "env": {
+        "PYTHONPATH": "/home/xmanz/JRVS"
+      }
+    }
+  }
+}

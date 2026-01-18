@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "Bash(curl:*)",
+      "Bash(cat:*)",
+      "Bash(pip install:*)",
+      "Bash(timeout:*)",
+      "Bash(tree:*)",
+      "Bash(python3:*)",
+      "Bash(tailscale:*)",
+      "Bash(chmod:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

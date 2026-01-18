@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JRVS Mind Map - Memory Visualization</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <link rel="stylesheet" href="/static/css/mindmap.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header id="header">
+            <div class="header-left">
+                <h1>🧠 JRVS Mind Map</h1>
+                <span class="subtitle">Memory Visualization</span>
+            </div>
+            <div class="header-right">
+                <a href="/static/index.html" class="nav-link">← Back to Chat</a>
+            </div>
+        </header>
+
+        <!-- Controls Panel -->
+        <aside id="controls">
+            <div class="control-section">
+                <h3>Filters</h3>
+                
+                <div class="control-group">
+                    <label for="timeRange">Time Range:</label>
+                    <select id="timeRange">
+                        <option value="all">All Time</option>
+                        <option value="week">Last Week</option>
+                        <option value="month">Last Month</option>
+                        <option value="year">Last Year</option>
+                    </select>
+                </div>
+                
+                <div class="control-group">
+                    <label for="category">Category:</label>
+                    <select id="category">
+                        <option value="">All Categories</option>
+                        <option value="programming">💻 Programming</option>
+                        <option value="research">🔬 Research</option>
+                        <option value="personal">👤 Personal</option>
+                        <option value="work">💼 Work</option>
+                        <option value="learning">📚 Learning</option>
+                        <option value="other">📌 Other</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label for="minConnections">Min Connections:</label>
+                    <input type="range" id="minConnections" min="0" max="10" value="0">
+                    <span id="minConnectionsValue">0</span>
+                </div>
+            </div>
+
+            <div class="control-section">
+                <h3>Actions</h3>
+                <div class="button-group">
+                    <button id="refreshBtn" class="btn btn-primary">
+                        <span class="icon">🔄</span> Refresh
+                    </button>
+                    <button id="buildBtn" class="btn btn-secondary">
+                        <span class="icon">🔨</span> Rebuild Graph
+                    </button>
+                    <button id="snapshotBtn" class="btn btn-secondary">
+                        <span class="icon">📸</span> Save Snapshot
+                    </button>
+                    <button id="insightsBtn" class="btn btn-accent">
+                        <span class="icon">💡</span> Show Insights
+                    </button>
+                </div>
+            </div>
+
+            <div class="control-section">
+                <h3>Statistics</h3>
+                <div id="stats" class="stats-panel">
+                    <div class="stat-item">
+                        <span class="stat-label">Topics:</span>
+                        <span id="topicCount" class="stat-value">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Connections:</span>
+                        <span id="connectionCount" class="stat-value">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Top Category:</span>
+                        <span id="topCategory" class="stat-value">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="control-section">
+                <h3>Legend</h3>
+                <div id="legend" class="legend-panel">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+
+            <div class="control-section">
+                <h3>Search</h3>
+                <div class="control-group">
+                    <input type="text" id="searchInput" placeholder="Search topics...">
+                    <button id="searchBtn" class="btn btn-small">🔍</button>
+                </div>
+                <div id="searchResults" class="search-results"></div>
+            </div>
+        </aside>
+
+        <!-- Main Graph Container -->
+        <main id="graph-container">
+            <svg id="mindmap"></svg>
+            <div id="loading" class="loading-overlay">
+                <div class="spinner"></div>
+                <p>Loading mind map...</p>
+            </div>
+            <div id="empty-state" class="empty-state hidden">
+                <div class="empty-icon">🗺️</div>
+                <h2>No Topics Yet</h2>
+                <p>Your mind map is empty. Start by building the graph from your conversation history.</p>
+                <button id="emptyBuildBtn" class="btn btn-primary">🔨 Build Mind Map</button>
+            </div>
+        </main>
+
+        <!-- Details Panel (Right Side) -->
+        <aside id="details-panel" class="hidden">
+            <button class="close-btn" onclick="closeDetails()">×</button>
+            <h3 id="detailsTitle"></h3>
+            <div id="detailsContent"></div>
+        </aside>
+
+        <!-- Insights Modal -->
+        <div id="insights-modal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>🧠 Mind Map Insights</h2>
+                    <button class="close-btn" onclick="closeInsights()">×</button>
+                </div>
+                <div id="insightsContent" class="modal-body"></div>
+            </div>
+        </div>
+
+        <!-- Toast Notifications -->
+        <div id="toast-container"></div>
+    </div>
+
+    <script src="/static/js/mindmap.js"></script>
+</body>
+</html>

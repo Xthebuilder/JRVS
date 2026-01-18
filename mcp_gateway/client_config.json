@@ -1,0 +1,84 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/tmp"
+      ],
+      "description": "File operations - JRVS can read, write, search, and manage files in allowed directories. Add your own paths to the 'args' array above."
+    },
+    "memory": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-memory"],
+      "description": "Persistent memory - JRVS remembers facts, notes, and preferences across sessions"
+    },
+    "brave-search": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+      "env": {
+        "BRAVE_API_KEY": ""
+      },
+      "description": "Web search via Brave - ADD YOUR API KEY ABOVE (get from https://brave.com/search/api/)"
+    }
+  },
+  "_disabled_servers": {},
+  "_comment": "Active MCP Servers for JRVS",
+  "_setup_instructions": {
+    "filesystem": {
+      "status": "READY TO USE",
+      "description": "Filesystem server allows JRVS to access files in specified directories",
+      "allowed_paths": [
+        "/tmp - Temporary files (default, always available)"
+      ],
+      "setup_note": "Add your own directories to the 'args' array in the filesystem server config above. Example: add '/home/yourusername/Documents' to allow access to your Documents folder.",
+      "security": "Only directories listed in 'args' are accessible. Add/remove paths as needed. Paths are validated before connection - invalid paths are filtered out with warnings.",
+      "tools": [
+        "read_file - Read file contents",
+        "write_file - Write to files",
+        "list_directory - List directory contents",
+        "create_directory - Create new directories",
+        "move_file - Move/rename files",
+        "search_files - Search for files",
+        "get_file_info - Get file metadata"
+      ]
+    },
+    "memory": {
+      "status": "READY TO USE",
+      "description": "Memory server gives JRVS persistent memory across sessions",
+      "storage": "~/.memory-server/ (automatically created)",
+      "tools": [
+        "create_memory - Store a new memory/note",
+        "search_memories - Search stored memories",
+        "list_memories - List all memories",
+        "delete_memory - Remove a memory"
+      ],
+      "examples": [
+        "Remember: User prefers Python 3.11",
+        "Remember: Daily standup at 9am every Monday",
+        "Remember: Database password is in ~/.secrets/db.txt"
+      ]
+    },
+    "brave-search": {
+      "status": "DISABLED - NEEDS API KEY",
+      "description": "Brave Search gives JRVS web search capabilities",
+      "setup_steps": [
+        "1. Get API key from: https://brave.com/search/api/",
+        "2. Replace 'GET_YOUR_KEY_FROM_...' with your actual key",
+        "3. Move this config from '_disabled_servers' to 'mcpServers'",
+        "4. Restart JRVS"
+      ],
+      "pricing": "Free tier: 2,000 queries/month",
+      "tools": [
+        "brave_web_search - Search the web",
+        "brave_local_search - Search for local businesses/places"
+      ]
+    }
+  },
+  "_notes": {
+    "security": "Be careful with filesystem paths - only add directories you trust JRVS to access",
+    "performance": "Each connected server uses some resources. Disable unused servers by moving them to _disabled_servers",
+    "more_servers": "See available servers at: https://github.com/modelcontextprotocol/servers"
+  }
+}
