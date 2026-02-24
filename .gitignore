@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.whl
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Secrets / credentials
+.env
+google_token.json
+google_credentials.json
+
+# Data / generated
+*.db
+*.sqlite
+faiss_indexes/*.index
+faiss_indexes/*.meta.json
+thumbnails/
+models/
+logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

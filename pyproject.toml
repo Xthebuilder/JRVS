@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jrvs"
+version = "1.0.0"
+description = "JRVS — Personal AI Assistant with Google Workspace, Brave search, and autonomous agent"
+requires-python = ">=3.11"
+dependencies = [
+    "click",
+    "rich",
+    "requests",
+    "python-dotenv",
+    "pyyaml",
+    "numpy",
+    "faiss-cpu",
+    "sentence-transformers",
+    "google-api-python-client",
+    "google-auth",
+    "google-auth-oauthlib",
+]
+
+[project.scripts]
+jrvs = "jrvs.cli.main:main"
+
+[tool.setuptools.packages.find]
+include = ["jrvs*"]
