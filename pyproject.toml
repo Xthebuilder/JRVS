@@ -23,6 +23,7 @@ dependencies = [
 
 [project.scripts]
 jrvs = "jrvs.cli.main:main"
+JRVS = "jrvs.cli.main:main"
 
 [tool.setuptools.packages.find]
 include = ["jrvs*"]
