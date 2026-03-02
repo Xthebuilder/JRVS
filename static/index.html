@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JRVS AI Agent</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h2>🤖 JRVS</h2>
+            <button class="new-chat-btn" onclick="newChat()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 5v14M5 12h14"/>
+                </svg>
+                New Chat
+            </button>
+        </div>
+
+        <div class="sidebar-section">
+            <h3>Quick Actions</h3>
+            <button class="sidebar-btn" onclick="quickCommand('/help')">
+                <span>📚</span> Help & Commands
+            </button>
+            <button class="sidebar-btn" onclick="quickCommand('/stats')">
+                <span>📊</span> System Stats
+            </button>
+            <button class="sidebar-btn" onclick="quickCommand('/report')">
+                <span>📝</span> Activity Report
+            </button>
+        </div>
+
+        <div class="sidebar-section">
+            <h3>Calendar</h3>
+            <button class="sidebar-btn" onclick="showCalendar()">
+                <span>📅</span> View Calendar
+            </button>
+            <button class="sidebar-btn" onclick="quickCommand('/today')">
+                <span>📆</span> Today's Events
+            </button>
+            <button class="sidebar-btn" onclick="showAddEvent()">
+                <span>➕</span> Add Event
+            </button>
+        </div>
+
+        <div class="sidebar-section">
+            <h3>MCP Tools</h3>
+            <button class="sidebar-btn" onclick="showMCPServers()">
+                <span>🔌</span> Connected Servers
+            </button>
+            <button class="sidebar-btn" onclick="showMCPTools()">
+                <span>🔧</span> Available Tools
+            </button>
+        </div>
+
+        <div class="sidebar-section">
+            <h3>AI Settings</h3>
+            <button class="sidebar-btn" onclick="showModels()">
+                <span>🧠</span> Switch Model
+            </button>
+            <button class="sidebar-btn" onclick="showThemes()">
+                <span>🎨</span> Change Theme
+            </button>
+        </div>
+
+        <div class="sidebar-section">
+            <h3>Knowledge Base</h3>
+            <button class="sidebar-btn" onclick="showScraper()">
+                <span>🌐</span> Scrape Website
+            </button>
+            <button class="sidebar-btn" onclick="quickCommand('/search')">
+                <span>🔍</span> Search Documents
+            </button>
+        </div>
+
+        <div class="sidebar-footer">
+            <div class="status-indicator" id="statusIndicator">
+                <span class="status-dot"></span>
+                <span id="statusText">Connecting...</span>
+            </div>
+            <div class="tailscale-badge">
+                🔒 Tailscale Only
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Header -->
+        <div class="header">
+            <button class="menu-toggle" onclick="toggleSidebar()">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 12h18M3 6h18M3 18h18"/>
+                </svg>
+            </button>
+            <div class="header-title">
+                <h1>JRVS AI Agent</h1>
+                <p>Intelligent Assistant with MCP Tools</p>
+            </div>
+            <div class="header-actions">
+                <button class="icon-btn" onclick="showSettings()" title="Settings">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M12 1v6m0 6v6"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Chat Container -->
+        <div class="chat-container" id="chatContainer">
+            <div class="welcome-screen" id="welcomeScreen">
+                <h1>🤖 JRVS AI Agent</h1>
+                <p>Your intelligent assistant with MCP tools, calendar, and RAG</p>
+
+                <div class="quick-actions-grid">
+                    <div class="quick-action-card" onclick="sendQuickMessage('What can you help me with?')">
+                        <div class="icon">💡</div>
+                        <h3>Get Started</h3>
+                        <p>Learn what JRVS can do</p>
+                    </div>
+                    <div class="quick-action-card" onclick="showCalendar()">
+                        <div class="icon">📅</div>
+                        <h3>View Calendar</h3>
+                        <p>See your events and schedule</p>
+                    </div>
+                    <div class="quick-action-card" onclick="sendQuickMessage('What files are in my JRVS directory?')">
+                        <div class="icon">📁</div>
+                        <h3>Browse Files</h3>
+                        <p>Use filesystem tools</p>
+                    </div>
+                    <div class="quick-action-card" onclick="showMCPServers()">
+                        <div class="icon">🔧</div>
+                        <h3>MCP Tools</h3>
+                        <p>View connected servers</p>
+                    </div>
+                </div>
+
+                <div class="example-prompts">
+                    <h3>Try asking:</h3>
+                    <div class="example-prompt" onclick="sendQuickMessage(this.textContent)">
+                        "Remember that I prefer Python 3.11 for all projects"
+                    </div>
+                    <div class="example-prompt" onclick="sendQuickMessage(this.textContent)">
+                        "Add meeting tomorrow at 2pm"
+                    </div>
+                    <div class="example-prompt" onclick="sendQuickMessage(this.textContent)">
+                        "What are the latest Python best practices?"
+                    </div>
+                </div>
+            </div>
+
+            <div class="messages" id="messages"></div>
+        </div>
+
+        <!-- Input Area -->
+        <div class="input-area">
+            <div class="input-container">
+                <button class="attach-btn" onclick="showAttachMenu()" title="Attach">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
+                    </svg>
+                </button>
+                <textarea
+                    id="messageInput"
+                    placeholder="Message JRVS..."
+                    rows="1"
+                    onkeydown="handleKeyPress(event)"
+                ></textarea>
+                <button class="send-btn" id="sendButton" onclick="sendMessage()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="input-hint">
+                Press Enter to send, Shift+Enter for new line
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div class="modal" id="calendarModal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2>📅 Calendar</h2>
+                <button class="modal-close" onclick="closeModal('calendarModal')">&times;</button>
+            </div>
+            <div class="modal-body" id="calendarContent">
+                Loading calendar...
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="mcpModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🔌 MCP Servers</h2>
+                <button class="modal-close" onclick="closeModal('mcpModal')">&times;</button>
+            </div>
+            <div class="modal-body" id="mcpContent">
+                Loading...
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="addEventModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>➕ Add Event</h2>
+                <button class="modal-close" onclick="closeModal('addEventModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="eventForm" onsubmit="submitEvent(event)">
+                    <div class="form-group">
+                        <label>Event Title</label>
+                        <input type="text" id="eventTitle" required placeholder="Team Meeting">
+                    </div>
+                    <div class="form-group">
+                        <label>Date</label>
+                        <input type="date" id="eventDate" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Time</label>
+                        <input type="time" id="eventTime" required value="14:00">
+                    </div>
+                    <div class="form-group">
+                        <label>Description (optional)</label>
+                        <textarea id="eventDescription" rows="3" placeholder="Meeting details..."></textarea>
+                    </div>
+                    <button type="submit" class="btn-primary">Add Event</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>

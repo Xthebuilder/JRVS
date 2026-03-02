@@ -1,0 +1,119 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/tmp",
+        "~",
+        "~/jrvs-workspace"
+      ],
+      "description": "File operations - read, write, search files in allowed directories. ~ and ~/jrvs-workspace are expanded at runtime."
+    },
+    "brave-search": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+      "env": {
+        "BRAVE_API_KEY": ""
+      },
+      "description": "Web search via Brave. Add your API key above (https://brave.com/search/api/)"
+    },
+    "sqlite": {
+      "command": "~/.local/bin/mcp-server-sqlite",
+      "args": [
+        "--db-path", "$JRVS_DIR/data/jarvis.db"
+      ],
+      "description": "Direct SQL access to JRVS memory database. Requires: pip install mcp-server-sqlite. $JRVS_DIR is set automatically to the JRVS project root."
+    },
+    "slack": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-slack"],
+      "env": {
+        "SLACK_BOT_TOKEN": "xoxb-YOUR-BOT-TOKEN-HERE",
+        "SLACK_TEAM_ID": "T00000000"
+      },
+      "description": "Slack integration. Replace the token and team ID with your real values — see _setup_instructions below."
+    }
+  },
+  "_disabled_servers": {
+    "memory": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-memory"],
+      "description": "DISABLED: JRVS uses its built-in FAISS vector store for memory. This MCP server would create a parallel shadow store invisible to RAG retrieval."
+    }
+  },
+  "_comment": "Paths support ~ (home dir) and $ENV_VARS — they are expanded at runtime by JRVS.",
+  "_setup_instructions": {
+    "sqlite": {
+      "status": "READY - after pip install",
+      "setup_steps": [
+        "1. pip install mcp-server-sqlite",
+        "2. The command path '~/.local/bin/mcp-server-sqlite' is expanded automatically",
+        "3. Update the --db-path arg to point to your jarvis.db if your JRVS lives elsewhere",
+        "4. Restart JRVS"
+      ],
+      "tools": [
+        "read_query    - Run SELECT queries",
+        "write_query   - Run INSERT/UPDATE/DELETE",
+        "list_tables   - List all tables",
+        "describe_table - Show table schema"
+      ],
+      "example_queries": [
+        "SELECT COUNT(*) FROM conversations",
+        "SELECT title, url FROM documents ORDER BY id DESC LIMIT 10",
+        "SELECT content FROM chunks WHERE content LIKE '%python%' LIMIT 5"
+      ]
+    },
+    "slack": {
+      "status": "NEEDS TOKENS",
+      "setup_steps": [
+        "1. Go to https://api.slack.com/apps → Create New App → From scratch",
+        "2. Name it JRVS, pick your workspace, click Create App",
+        "3. OAuth & Permissions → Bot Token Scopes → add: channels:history, channels:read, chat:write, reactions:read, users:read, groups:read",
+        "4. Install to Workspace → Allow → copy the xoxb-... Bot Token",
+        "5. Get Team ID from Slack URL: app.slack.com/client/TXXXXXXX/...",
+        "6. Paste both into the env fields in the slack server config above",
+        "7. Restart JRVS"
+      ],
+      "tools": [
+        "slack_list_channels       - List all public channels",
+        "slack_post_message        - Send a message",
+        "slack_reply_to_thread     - Reply in a thread",
+        "slack_get_channel_history - Read recent messages",
+        "slack_search_messages     - Search workspace",
+        "slack_get_users           - List members",
+        "slack_post_ephemeral_message - Private message"
+      ]
+    },
+    "filesystem": {
+      "status": "READY TO USE",
+      "setup_note": "Add any directories you want JRVS to access to the args array. ~ is expanded to your home directory.",
+      "security": "Only directories listed in args are accessible.",
+      "tools": [
+        "read_file      - Read file contents",
+        "write_file     - Write to files",
+        "list_directory - List directory contents",
+        "create_directory - Create directories",
+        "move_file      - Move/rename files",
+        "search_files   - Search for files",
+        "get_file_info  - File metadata"
+      ]
+    },
+    "brave-search": {
+      "status": "NEEDS API KEY",
+      "setup_steps": [
+        "1. Get API key from https://brave.com/search/api/ (free: 2,000/month)",
+        "2. Add key to BRAVE_API_KEY env field above",
+        "3. Restart JRVS"
+      ],
+      "note": "The built-in /websearch command works independently of this MCP server."
+    }
+  },
+  "_notes": {
+    "paths": "Use ~ for home directory and $ENV_VARS in command/args — JRVS expands them automatically",
+    "security": "Only add directories you trust JRVS to read/write",
+    "performance": "Disable unused servers by moving them to _disabled_servers",
+    "more_servers": "https://github.com/modelcontextprotocol/servers"
+  }
+}

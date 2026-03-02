@@ -1,0 +1,45 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# JRVS Audio Extension — user configuration
+# ──────────────────────────────────────────────────────────────────────────────
+# input.device examples:
+#   null              → system default microphone
+#   "USB Microphone"  → match by device name substring
+#   0                 → match by device index
+# ──────────────────────────────────────────────────────────────────────────────
+
+enabled: true
+
+input:
+  device: null           # null = system default
+  sample_rate: 16000     # Hz; Whisper requires 16000
+  channels: 1
+  chunk_ms: 30           # VAD frame length in milliseconds (10, 20, or 30)
+  vad_aggressiveness: 2  # 0 (least) – 3 (most aggressive filtering)
+  silence_timeout: 1.5   # seconds of silence to end utterance
+  max_duration: 30       # maximum utterance length in seconds
+
+stt:
+  backend: "whisper"
+  model: "base"          # tiny | base | small | medium | large-v3
+  language: "en"         # ISO 639-1 code, or null for auto-detect
+  device: "cpu"          # "cpu" or "cuda"
+  compute_type: "int8"   # int8 (CPU) | float16 (GPU) | float32
+
+tts:
+  backend: "piper"       # "piper" | "kokoro"
+  piper:
+    model: "en_US-lessac-medium"
+    models_dir: "~/.local/share/piper-voices"
+    binary: "piper"      # path to piper binary, or just "piper" if on PATH
+    output_sample_rate: 22050
+  kokoro:
+    model_path: null     # null = download to ~/.cache/jrvs/kokoro
+    voice: "af_sky"
+    lang_code: "a"       # "a" = American English
+  speed: 1.0             # TTS speech rate multiplier
+
+conversation:
+  wake_word: "hey jarvis"    # trigger phrase; null = always-on VAD mode
+  wake_word_threshold: 0.5   # openwakeword confidence threshold (0–1)
+  ack_tone: true             # play a short beep after wake word detected
+  response_prefix: ""        # optional string JRVS says before each response

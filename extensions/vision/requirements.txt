@@ -1,0 +1,20 @@
+# JRVS Vision Extension dependencies
+# Install with: pip install -r extensions/vision/requirements.txt
+
+# Camera capture
+opencv-python>=4.8.0,<5.0.0
+
+# HTTP client for LLaVA (Ollama)
+aiohttp>=3.8.0,<4.0.0           # already in JRVS requirements.txt
+
+# YAML config
+PyYAML>=6.0,<7.0                # already in many Python environments
+
+# Moondream / HuggingFace (only needed if backend = "moondream")
+# torch>=2.0.0,<3.0.0           # already in JRVS requirements.txt
+# transformers>=4.30.0,<5.0.0   # already in JRVS requirements.txt
+# Pillow>=9.0.0,<11.0.0         # image handling for moondream
+Pillow>=9.0.0,<11.0.0
+
+# NumPy (already in JRVS requirements.txt)
+# numpy>=1.24.0,<3.0.0

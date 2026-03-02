@@ -1,0 +1,30 @@
+# JRVS Audio Extension dependencies
+# Install with: pip install -r extensions/audio/requirements.txt
+
+# YAML config
+PyYAML>=6.0,<7.0
+
+# Microphone capture + audio playback (Linux ALSA / PulseAudio)
+sounddevice>=0.4.6,<0.6.0
+numpy>=1.24.0,<3.0.0           # already in JRVS requirements.txt
+
+# Voice activity detection
+webrtcvad>=2.0.10,<3.0.0
+
+# Speech-to-text (Whisper)
+faster-whisper>=1.0.0,<2.0.0
+
+# Wake word detection (local, Apache-2.0)
+openwakeword>=0.6.0,<1.0.0
+
+# TTS — Piper is a standalone binary; install separately:
+#   https://github.com/rhasspy/piper/releases
+# The Python bindings (optional, subprocess approach is used by default):
+# piper-tts>=1.2.0
+
+# TTS — Kokoro (optional; only needed if tts.backend = "kokoro")
+# kokoro>=0.9.4
+# Install kokoro: pip install kokoro soundfile
+
+# Audio I/O helper (used by Kokoro backend)
+soundfile>=0.12.0,<1.0.0

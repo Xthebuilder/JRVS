@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "jrvs": {
+      "command": "python",
+      "args": [
+        "/path/to/JRVS/mcp_gateway/server.py"
+      ],
+      "env": {
+        "PYTHONPATH": "/path/to/JRVS"
+      }
+    }
+  },
+  "_note": "Replace /path/to/JRVS with the absolute path to your JRVS installation. See docs/MCP_SETUP.md for full instructions."
+}

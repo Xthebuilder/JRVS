@@ -1,0 +1,97 @@
+version: '3.8'
+
+services:
+  # ============================================================================
+  # Ollama Service
+  # ============================================================================
+  ollama:
+    image: ollama/ollama:latest
+    container_name: jrvs-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_ORIGINS=*
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - jrvs-network
+
+  # ============================================================================
+  # JRVS Enhanced MCP Server
+  # ============================================================================
+  jrvs-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp
+    container_name: jrvs-mcp-server
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      # Server config
+      - JRVS_LOG_LEVEL=INFO
+      - JRVS_HOST=0.0.0.0
+      - JRVS_PORT=3000
+
+      # Ollama config
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_DEFAULT_MODEL=deepseek-r1:14b
+
+      # Database
+      - JRVS_DB_PATH=/app/data/jarvis.db
+
+      # Cache
+      - JRVS_CACHE_ENABLED=true
+
+      # Rate limiting
+      - JRVS_RATE_LIMIT_ENABLED=true
+      - JRVS_RATE_LIMIT_PER_MINUTE=60
+
+      # Authentication (disable in production with real auth)
+      - JRVS_AUTH_ENABLED=false
+      - JRVS_REQUIRE_API_KEY=false
+    volumes:
+      # Persistent data
+      - jrvs_data:/app/data
+      - jrvs_logs:/app/logs
+
+      # Mount code for development (comment out for production)
+      # - ./:/app
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+      - jrvs-network
+    stdin_open: true
+    tty: true
+
+# ============================================================================
+# Volumes
+# ============================================================================
+volumes:
+  ollama_data:
+    driver: local
+  jrvs_data:
+    driver: local
+  jrvs_logs:
+    driver: local
+
+# ============================================================================
+# Networks
+# ============================================================================
+networks:
+  jrvs-network:
+    driver: bridge

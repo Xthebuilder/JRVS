@@ -1,0 +1,56 @@
+{
+  "server": {
+    "host": "localhost",
+    "port": 3000,
+    "log_level": "INFO",
+    "log_file": "logs/jrvs-mcp.log",
+    "json_logs": true
+  },
+  "ollama": {
+    "base_url": "http://localhost:11434",
+    "default_model": "deepseek-r1:14b",
+    "timeout_seconds": 300,
+    "max_retries": 3
+  },
+  "database": {
+    "path": "data/jarvis.db",
+    "max_connections": 10,
+    "timeout_seconds": 30
+  },
+  "rag": {
+    "vector_index_path": "data/faiss_index",
+    "embedding_model": "all-MiniLM-L6-v2",
+    "max_context_length": 4000,
+    "max_retrieved_chunks": 5,
+    "chunk_size": 512,
+    "chunk_overlap": 50,
+    "embedding_batch_size": 64
+  },
+  "cache": {
+    "enabled": true,
+    "max_size": 1000,
+    "default_ttl_seconds": 300,
+    "cleanup_interval_seconds": 60
+  },
+  "rate_limit": {
+    "enabled": true,
+    "default_rate_per_minute": 60,
+    "default_burst": 10,
+    "per_client_limits": {}
+  },
+  "resource": {
+    "max_memory_mb": 2048,
+    "max_concurrent_requests": 100,
+    "max_request_duration_seconds": 300
+  },
+  "auth": {
+    "enabled": false,
+    "require_api_key": false,
+    "development_mode": true
+  },
+  "monitoring": {
+    "enabled": true,
+    "metrics_interval_seconds": 30,
+    "health_check_interval_seconds": 60
+  }
+}
