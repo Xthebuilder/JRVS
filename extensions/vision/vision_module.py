@@ -52,7 +52,7 @@ class VisionModule(BaseExtension):
 
     def __init__(self, config=None) -> None:
         self._cfg = config or vision_config
-        self._camera = CameraManager(self._cfg.camera_source)
+        self._camera = CameraManager(self._cfg.camera_source, fps_capture=self._cfg.fps_capture)
         self._processor = FrameProcessor(
             motion_threshold=self._cfg.motion_threshold,
             periodic_interval=self._cfg.periodic_interval,

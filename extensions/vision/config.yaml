@@ -2,10 +2,14 @@
 # JRVS Vision Extension — user configuration
 # ──────────────────────────────────────────────────────────────────────────────
 # camera.source examples:
-#   0                              → first USB webcam
-#   1                              → second USB webcam
+#   0                                → first USB webcam
+#   1                                → second USB webcam
 #   "http://192.168.1.X:4747/video"  → DroidCam over WiFi (default port 4747)
-#   "rtsp://user:pass@192.168.1.X/stream1"  → network camera RTSP
+#   "rtsp://user:pass@192.168.1.X/stream1" → network camera RTSP
+#   "screen"                         → primary monitor (desktop screen capture)
+#   "screen:0"                       → all monitors combined
+#   "screen:2"                       → secondary monitor
+#   "screen:1:0,0,1280,720"          → cropped region on monitor 1 (x,y,w,h)
 # ──────────────────────────────────────────────────────────────────────────────
 
 enabled: true

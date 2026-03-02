@@ -4,6 +4,9 @@
 # Camera capture
 opencv-python>=4.8.0,<5.0.0
 
+# Screen capture (for source: "screen", "screen:1", "screen:1:x,y,w,h")
+mss>=9.0.0,<10.0.0
+
 # HTTP client for LLaVA (Ollama)
 aiohttp>=3.8.0,<4.0.0           # already in JRVS requirements.txt
 

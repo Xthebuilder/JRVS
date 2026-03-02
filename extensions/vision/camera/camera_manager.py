@@ -1,15 +1,18 @@
 """
-CameraManager — opens and maintains a camera stream.
+CameraManager — opens and maintains a camera or screen stream.
 
 Supported sources (set via config.yaml or JRVS_VISION_CAMERA_SOURCE):
-  0, 1, …            USB / built-in webcam (device index)
-  http://IP:4747/video  DroidCam over WiFi (MJPEG HTTP stream)
-  rtsp://…           RTSP network camera
-  http://…           Any HTTP MJPEG stream
+  0, 1, …              USB / built-in webcam (device index)
+  http://IP:4747/video DroidCam over WiFi (MJPEG HTTP stream)
+  rtsp://…             RTSP network camera
+  http://…             Any HTTP MJPEG stream
+  "screen"             Primary monitor (desktop screen capture)
+  "screen:0"           All monitors combined
+  "screen:2"           Secondary monitor
+  "screen:1:x,y,w,h"  Cropped region, e.g. "screen:1:0,0,1280,720"
 
-The manager runs a background thread that continuously reads frames into a
-one-element buffer so the latest frame is always available without blocking
-the async event loop.  On disconnect it reconnects with exponential backoff.
+For physical cameras the manager runs a background thread with exponential-
+backoff reconnect.  Screen sources are delegated to ScreenCapture (mss).
 """
 from __future__ import annotations
 
@@ -21,6 +24,8 @@ from typing import Optional, Union
 import cv2
 import numpy as np
 
+from extensions.vision.camera.screen_capture import ScreenCapture
+
 logger = logging.getLogger(__name__)
 
 _RECONNECT_BASE_DELAY = 1.0   # seconds
@@ -29,25 +34,42 @@ _FRAME_TIMEOUT        = 5.0   # seconds before declaring source stale
 
 
 class CameraManager:
-    """Thread-safe camera reader with auto-reconnect."""
+    """
+    Thread-safe camera / screen reader.
 
-    def __init__(self, source: Union[int, str]) -> None:
+    Automatically routes to ScreenCapture when source starts with "screen",
+    otherwise uses OpenCV VideoCapture for USB/RTSP/HTTP cameras.
+    """
+
+    def __init__(self, source: Union[int, str], fps_capture: float = 2.0) -> None:
         self.source = source
+        self._fps_capture = fps_capture
+        self._screen: Optional[ScreenCapture] = None
         self._cap: Optional[cv2.VideoCapture] = None
         self._latest_frame: Optional[np.ndarray] = None
         self._frame_lock = threading.Lock()
         self._last_frame_time: float = 0.0
         self._running = False
         self._thread: Optional[threading.Thread] = None
+        self._is_screen = ScreenCapture.is_screen_source(source)
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
     def open(self) -> None:
-        """Open the camera and start the background reader thread."""
+        """Open the source and start capturing."""
         if self._running:
             return
+        # Screen source — delegate entirely to ScreenCapture
+        if self._is_screen:
+            self._screen = ScreenCapture(
+                source=str(self.source), fps=self._fps_capture
+            )
+            self._screen.open()
+            self._running = True
+            return
+        # Physical camera source — use OpenCV reader thread
         self._running = True
         self._thread = threading.Thread(
             target=self._reader_loop, name="vision-camera-reader", daemon=True
@@ -63,8 +85,12 @@ class CameraManager:
         logger.warning("Camera %s opened but no frame received within 5 s", self.source)
 
     def close(self) -> None:
-        """Stop the reader thread and release the capture device."""
+        """Stop capturing and release resources."""
         self._running = False
+        if self._screen:
+            self._screen.close()
+            self._screen = None
+            return
         if self._thread:
             self._thread.join(timeout=3.0)
         if self._cap and self._cap.isOpened():
@@ -73,10 +99,11 @@ class CameraManager:
 
     def read_frame(self) -> Optional[np.ndarray]:
         """Return the most recent frame (BGR), or None if unavailable."""
+        if self._screen:
+            return self._screen.read_frame()
         with self._frame_lock:
             if self._latest_frame is None:
                 return None
-            # Detect stale stream
             if time.monotonic() - self._last_frame_time > _FRAME_TIMEOUT:
                 logger.warning("Camera stream appears stale (no frame for %.0fs)", _FRAME_TIMEOUT)
                 return None
@@ -84,6 +111,8 @@ class CameraManager:
 
     @property
     def is_open(self) -> bool:
+        if self._screen:
+            return self._screen.is_open
         return self._running and self._cap is not None and self._cap.isOpened()
 
     # ------------------------------------------------------------------

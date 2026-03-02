@@ -30,7 +30,7 @@ Extensions locate the JRVS root automatically via `Path(__file__).parent` traver
 
 ### What it does
 
-1. Opens a camera (USB, DroidCam WiFi, RTSP, or HTTP MJPEG)
+1. Opens a camera or screen source (USB, DroidCam WiFi, RTSP, HTTP MJPEG, or desktop screen capture)
 2. Uses MOG2 background subtraction to detect motion — only runs inference when something changes or on a periodic timer
 3. Sends the frame to LLaVA (via Ollama) or Moondream (local HuggingFace) for a natural-language description
 4. Logs the description into JRVS memory (SQLite + FAISS) with timestamp and metadata
@@ -49,7 +49,7 @@ ollama pull llava:7b
 # No extra install needed; transformers is already in JRVS requirements.txt
 ```
 
-### Camera sources
+### Camera / screen sources
 
 | Source | Config value | Notes |
 |--------|-------------|-------|
@@ -57,6 +57,28 @@ ollama pull llava:7b
 | DroidCam over WiFi | `"http://192.168.1.X:4747/video"` | Open DroidCam app first |
 | Any HTTP MJPEG stream | `"http://IP:port/video"` | |
 | RTSP network camera | `"rtsp://user:pass@IP/stream"` | |
+| **Primary monitor** | `"screen"` | Desktop screen capture via mss |
+| **All monitors** | `"screen:0"` | Combined wide frame |
+| **Specific monitor** | `"screen:2"` | Monitor 2, full resolution |
+| **Cropped region** | `"screen:1:0,0,1280,720"` | x,y,width,height on monitor 1 |
+
+**Screen capture quick start:**
+```bash
+# Switch to screen capture in config
+# extensions/vision/config.yaml:
+#   camera:
+#     source: "screen"
+
+# Or via environment variable (no config edit needed)
+export JRVS_VISION_CAMERA_SOURCE="screen"
+python -m extensions.vision.vision_module --describe-once
+```
+
+JRVS will describe what's on your screen in natural language, log it to memory, and flag anomalies (e.g. an application you don't normally use appearing at an unusual time). Ask it later:
+```
+jarvis❯ What was I working on at 3pm?
+jarvis❯ What error was on my screen earlier?
+```
 
 Set in `extensions/vision/config.yaml`:
 ```yaml
@@ -390,6 +412,9 @@ JRVS_AUDIO_CONVERSATION_WAKE_WORD="hey jarvis"
 | Moondream slow on first run | Downloading ~1.9GB model; subsequent runs use cache |
 | No anomalies detected | Lower `anomaly.similarity_threshold` in config (try `0.5`) |
 | Alerts not in `/calendar` | Set `alerts.write_to_jrvs_events: true` and ensure JRVS DB is initialized |
+| `mss not installed` | `pip install mss` |
+| Screen capture black/blank on Wayland | mss works via XWayland; run `export DISPLAY=:0` before starting, or switch to X11 session |
+| Wrong monitor captured | Use `"screen:2"` for secondary; list monitors with `python -c "import mss; s=mss.mss(); print(s.monitors)"` |
 
 ### Audio
 

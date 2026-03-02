@@ -213,10 +213,21 @@ python -m extensions.vision.vision_module --describe-once
 python -m extensions.vision.vision_module --run
 ```
 
-**DroidCam over WiFi:** open `extensions/vision/config.yaml` and set:
+**Source options:**
+
+| Source | Config value |
+|--------|-------------|
+| USB / built-in webcam | `0`, `1`, `2` |
+| DroidCam over WiFi | `"http://192.168.1.X:4747/video"` |
+| RTSP network camera | `"rtsp://user:pass@IP/stream"` |
+| Desktop screen (primary) | `"screen"` |
+| Specific monitor | `"screen:2"` |
+| Cropped screen region | `"screen:1:0,0,1280,720"` |
+
+Set in `extensions/vision/config.yaml`:
 ```yaml
 camera:
-  source: "http://192.168.1.X:4747/video"   # replace X with your phone's IP
+  source: "screen"             # or "http://192.168.1.X:4747/video" for DroidCam
 ```
 
 **Use from JRVS orchestration code:**
