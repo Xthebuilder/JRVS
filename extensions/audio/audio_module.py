@@ -47,6 +47,9 @@ from extensions.audio.input.stt_engine import STTBackend, create_stt_backend
 from extensions.audio.output.tts_engine import TTSBackend, create_tts_backend
 from extensions.audio.output.audio_player import AudioPlayer
 from extensions.audio.models.schemas import Transcript, SpeechEvent
+from extensions.audio.intent_parser import intent_parser
+from extensions.audio.command_executor import CommandExecutor
+from extensions.audio.command_mode import CommandMode
 
 logger = logging.getLogger(__name__)
 
@@ -59,8 +62,9 @@ class AudioModule(BaseExtension):
     Piper/Kokoro TTS.  Everything runs locally; nothing is sent to external APIs.
     """
 
-    def __init__(self, config=None) -> None:
+    def __init__(self, config=None, vision_module=None) -> None:
         self._cfg = config or audio_config
+        self._vision = vision_module   # optional VisionModule for vision commands
         self._mic = MicrophoneCapture(
             device=self._cfg.input_device,
             sample_rate=self._cfg.sample_rate,
@@ -77,6 +81,7 @@ class AudioModule(BaseExtension):
         self._tts: Optional[TTSBackend] = None
         self._player = AudioPlayer()
         self._wake_detector: Optional["_WakeWordDetector"] = None
+        self._cmd_mode: Optional[CommandMode] = None
 
         self._running = False
         self._loop_task: Optional[asyncio.Task] = None
@@ -238,6 +243,19 @@ class AudioModule(BaseExtension):
         if self._stt is None or self._tts is None:
             raise RuntimeError("Call initialize() before start_loop().")
 
+        # Build command mode machinery
+        executor = CommandExecutor(
+            on_input=on_input,
+            vision_module=self._vision,
+        )
+        self._cmd_mode = CommandMode(
+            executor=executor,
+            listen_fn=self.listen,
+            speak_fn=self.speak,
+            multi_command=self._cfg.cmd_multi_command,
+            command_timeout=self._cfg.cmd_timeout,
+        )
+
         self._running = True
         self._start_time = datetime.now()
         self._loop_task = asyncio.create_task(
@@ -279,7 +297,13 @@ class AudioModule(BaseExtension):
 
                 logger.info("User: %s", user_text)
 
-                # ── Step 5: get JRVS response ─────────────────────────────────
+                # ── Step 5a: check for command mode trigger ───────────────────
+                if self._cmd_mode and intent_parser.is_command_mode_trigger(user_text):
+                    logger.info("Command mode triggered.")
+                    await self._cmd_mode.run()
+                    continue
+
+                # ── Step 5b: get JRVS response ────────────────────────────────
                 t_stt = time.perf_counter()
                 try:
                     response = await on_input(user_text)

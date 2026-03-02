@@ -43,3 +43,13 @@ conversation:
   wake_word_threshold: 0.5   # openwakeword confidence threshold (0–1)
   ack_tone: true             # play a short beep after wake word detected
   response_prefix: ""        # optional string JRVS says before each response
+
+command_mode:
+  enabled: true
+  # Trigger phrase — say this after the wake word to enter command mode.
+  # e.g. "hey jarvis" → [ack] → "command mode" → JRVS: "Waiting for your command, sir."
+  trigger: "command mode"
+  # Stay in command mode for multiple commands until "exit" or timeout.
+  multi_command: true
+  # Seconds of silence before auto-exiting command mode.
+  timeout: 10.0

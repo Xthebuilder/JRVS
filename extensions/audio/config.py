@@ -122,6 +122,19 @@ class AudioConfig:
             "conversation_response_prefix", conv.get("response_prefix", "")
         )
 
+        # ── command mode ──────────────────────────────────────────────────────
+        cmd = data.get("command_mode", {})
+        self.cmd_enabled: bool = _env("command_mode_enabled", cmd.get("enabled", True))
+        self.cmd_trigger: str = _env(
+            "command_mode_trigger", cmd.get("trigger", "command mode")
+        )
+        self.cmd_multi_command: bool = _env(
+            "command_mode_multi_command", cmd.get("multi_command", True)
+        )
+        self.cmd_timeout: float = _env(
+            "command_mode_timeout", cmd.get("timeout", 10.0)
+        )
+
         self._validate()
 
     def _validate(self) -> None:
