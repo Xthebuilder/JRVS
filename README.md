@@ -13,7 +13,7 @@ Most agent frameworks optimize for hosted APIs and rapid abstraction. JRVS is op
 - **Local inference** — CPU/GPU, quantized models, limited memory
 - **Offline or privacy-sensitive workflows** — no data leaves your machine
 - **Explicit control** — over tools, memory, retrieval, and context
-- **Extensibility without tight coupling** — via MCP and UTCP protocols
+- **Extensibility without tight coupling** — via MCP, UTCP, and the new Extensions system
 
 ---
 
@@ -31,6 +31,8 @@ Most agent frameworks optimize for hosted APIs and rapid abstraction. JRVS is op
 | **UTCP** | Universal Tool Calling Protocol via REST API |
 | **Web UI** | Optional browser-based chat interface |
 | **API Server** | FastAPI server for programmatic access |
+| **Vision Extension** | Camera capture, LLaVA/Moondream inference, anomaly detection |
+| **Audio Extension** | Wake word → Whisper STT → JRVS → Piper/Kokoro TTS |
 
 ---
 
@@ -48,8 +50,8 @@ Most agent frameworks optimize for hosted APIs and rapid abstraction. JRVS is op
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/Xthebuilder/JRVS.git
-cd JRVS
+git clone https://github.com/Xthebuilder/JRVS_Private.git
+cd JRVS_Private
 
 # 2. Create a virtual environment (recommended)
 python3 -m venv venv
@@ -187,6 +189,140 @@ All options: `python main.py --help`
 
 ---
 
+## Extensions
+
+JRVS ships with two standalone extension modules under `extensions/`. They hook into JRVS memory and events without modifying any core files. Both run entirely locally.
+
+### Vision Extension
+
+Connects to any camera — built-in webcam, USB camera, DroidCam over WiFi, or any RTSP/HTTP stream. Captures frames intelligently (only processes frames when motion is detected or on a periodic interval), runs local visual inference, logs observations into JRVS memory, and surfaces anomaly alerts when something unusual is detected.
+
+**Quick start:**
+
+```bash
+# Install vision dependencies
+pip install -r extensions/vision/requirements.txt
+
+# For LLaVA inference: pull the model into Ollama (already running for JRVS)
+ollama pull llava:7b
+
+# Describe what the camera sees right now
+python -m extensions.vision.vision_module --describe-once
+
+# Run the full background loop
+python -m extensions.vision.vision_module --run
+```
+
+**DroidCam over WiFi:** open `extensions/vision/config.yaml` and set:
+```yaml
+camera:
+  source: "http://192.168.1.X:4747/video"   # replace X with your phone's IP
+```
+
+**Use from JRVS orchestration code:**
+```python
+from extensions.vision import VisionModule
+
+vision = VisionModule()
+await vision.initialize()
+await vision.start()                            # background loop
+
+description = await vision.describe_frame()     # on-demand snapshot
+alerts = await vision.get_alerts()             # anomalies for JRVS to reason about
+```
+
+Once running, ask JRVS naturally:
+```
+jarvis❯ What did you see in the last hour?
+jarvis❯ Was there any unusual activity at 2am?
+```
+Vision observations are embedded and stored in JRVS's FAISS index so they show up in normal RAG retrieval.
+
+**Config:** `extensions/vision/config.yaml`
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `camera.source` | `0` | `0`=webcam, URL=DroidCam/RTSP |
+| `inference.backend` | `"llava"` | `"llava"` or `"moondream"` |
+| `inference.llava.model` | `"llava:7b"` | Ollama model name |
+| `camera.motion_threshold` | `0.05` | Fraction of pixels changed to trigger inference |
+| `camera.periodic_interval` | `30` | Always infer at least every N seconds |
+| `anomaly.alert_threshold` | `0.85` | Score above which an alert is raised |
+| `memory.log_level` | `"scene"` | `"all"` / `"scene"` / `"anomaly"` |
+
+---
+
+### Audio Extension
+
+Full conversational voice I/O. Listens for a wake word ("hey jarvis"), records your speech, transcribes with Whisper, sends the text to JRVS, and speaks the response back using Piper or Kokoro TTS. Everything runs locally.
+
+**Install dependencies:**
+
+```bash
+pip install -r extensions/audio/requirements.txt
+
+# Piper binary (Linux x86_64 example)
+wget https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz
+tar -xzf piper_linux_x86_64.tar.gz
+sudo mv piper/piper /usr/local/bin/
+
+# Download a voice model
+mkdir -p ~/.local/share/piper-voices
+wget -P ~/.local/share/piper-voices \
+  https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx
+wget -P ~/.local/share/piper-voices \
+  https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json
+```
+
+**Smoke tests:**
+
+```bash
+# Test TTS — hear JRVS speak
+python -m extensions.audio.audio_module --say "Hello, I am JRVS."
+
+# Test STT — speak and see transcription
+python -m extensions.audio.audio_module --listen-once
+
+# Run full wake-word conversation loop
+python -m extensions.audio.audio_module --run
+```
+
+**Use from JRVS orchestration code:**
+```python
+from extensions.audio import AudioModule
+import aiohttp
+
+audio = AudioModule()
+await audio.initialize()
+
+async def jrvs_respond(user_text: str) -> str:
+    async with aiohttp.ClientSession() as s:
+        resp = await s.post(
+            "http://localhost:8000/api/chat",
+            json={"message": user_text, "session_id": "voice"}
+        )
+        data = await resp.json()
+        return data["response"]
+
+await audio.start_loop(jrvs_respond)   # say "hey jarvis" to begin
+```
+
+**Config:** `extensions/audio/config.yaml`
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `input.device` | `null` | `null`=system default, or device name/index |
+| `stt.model` | `"base"` | Whisper size: `tiny` / `base` / `small` / `medium` / `large-v3` |
+| `tts.backend` | `"piper"` | `"piper"` or `"kokoro"` |
+| `tts.piper.model` | `"en_US-lessac-medium"` | Voice model name |
+| `conversation.wake_word` | `"hey jarvis"` | Trigger phrase (null = always-on) |
+| `input.vad_aggressiveness` | `2` | VAD strictness 0–3 |
+| `input.silence_timeout` | `1.5` | Seconds of silence to end utterance |
+
+See [docs/EXTENSIONS.md](docs/EXTENSIONS.md) for full documentation on both modules.
+
+---
+
 ## How It Works
 
 ### RAG Pipeline
@@ -207,7 +343,7 @@ MMR Diversity Filter
 Context injected into LLM prompt → Response
 ```
 
-1. **Ingestion**: URLs/files → chunked → BGE embeddings → FAISS + FTS5
+1. **Ingestion**: URLs/files/vision observations → chunked → BGE embeddings → FAISS + FTS5
 2. **Retrieval**: hybrid FAISS + keyword search → reranked → diverse context
 3. **Memory**: every conversation turn is embedded and stored for cross-session recall
 
@@ -262,13 +398,22 @@ Supports 30+ extensions: `.txt`, `.md`, `.py`, `.js`, `.json`, `.csv`, `.yaml`, 
 | `SIMILARITY_THRESHOLD` | `0.35` | Min cosine similarity for retrieval |
 | `MAX_CONTEXT_LENGTH` | `12000` | Max chars of context injected |
 | `CONVERSATION_HISTORY_TURNS` | `8` | In-session turns sent to LLM |
+| **Vision Extension** | | |
+| `JRVS_VISION_CAMERA_SOURCE` | `0` | Camera source override |
+| `JRVS_VISION_INFERENCE_BACKEND` | `llava` | `llava` or `moondream` |
+| `JRVS_VISION_ENABLED` | `true` | Enable/disable vision module |
+| **Audio Extension** | | |
+| `JRVS_AUDIO_INPUT_DEVICE` | system default | Microphone device name or index |
+| `JRVS_AUDIO_STT_MODEL` | `base` | Whisper model size |
+| `JRVS_AUDIO_TTS_BACKEND` | `piper` | `piper` or `kokoro` |
+| `JRVS_AUDIO_CONVERSATION_WAKE_WORD` | `hey jarvis` | Wake phrase |
 
 All variables can be set in your shell or a `.env` file.
 
-**Example — remote Ollama:**
+**Example — remote Ollama + DroidCam:**
 ```bash
 export OLLAMA_BASE_URL="http://192.168.1.100:11434"
-export OLLAMA_DEFAULT_MODEL="llama3.1:8b"
+export JRVS_VISION_CAMERA_SOURCE="http://192.168.1.50:4747/video"
 python main.py
 ```
 
@@ -346,6 +491,21 @@ JRVS/
 ├── config.py                # All configuration (env vars)
 ├── requirements.txt
 │
+├── extensions/              # Plug-and-play extension modules
+│   ├── base.py              # BaseExtension ABC
+│   ├── vision/              # Vision extension (camera + inference + anomaly)
+│   │   ├── vision_module.py # PUBLIC: VisionModule class
+│   │   ├── config.yaml      # User config (camera source, model, thresholds)
+│   │   ├── camera/          # CameraManager (USB/DroidCam/RTSP), FrameProcessor
+│   │   ├── inference/       # LLaVABackend (Ollama), MoondreamBackend (local)
+│   │   ├── memory/          # VisionLogger (→ JRVS FAISS), AnomalyDetector
+│   │   └── alerts/          # AlertManager (→ JRVS events table)
+│   └── audio/               # Audio extension (STT + TTS + wake word)
+│       ├── audio_module.py  # PUBLIC: AudioModule class
+│       ├── config.yaml      # User config (mic, model, voice, wake word)
+│       ├── input/           # MicrophoneCapture, VoiceActivityDetector, WhisperBackend
+│       └── output/          # PiperBackend, KokoroBackend, AudioPlayer
+│
 ├── rag/
 │   ├── embeddings.py        # BGE-base-en-v1.5 embeddings (768-dim)
 │   ├── vector_store.py      # FAISS index (HNSW auto-upgrade at 200k vectors)
@@ -355,7 +515,7 @@ JRVS/
 ├── core/
 │   ├── database.py          # SQLite (aiosqlite) + FTS5
 │   ├── file_handler.py      # File upload ingestion
-│   └── calendar.py          # Calendar parsing
+│   └── calendar.py          # Calendar events (also used by vision alerts)
 │
 ├── llm/
 │   ├── ollama_client.py     # Ollama /api/chat integration
@@ -378,11 +538,7 @@ JRVS/
 │   ├── client.py            # MCP client
 │   └── client_config.json   # MCP server configuration
 │
-├── uploads/                 # Drop files here for ingestion
-│
-└── data/                    # Auto-generated
-    ├── jarvis.db            # SQLite database
-    └── faiss_index.*        # Vector index
+└── uploads/                 # Drop files here for ingestion
 ```
 
 ---
@@ -436,11 +592,32 @@ JRVS auto-detects and rebuilds the index if the embedding model changed. Old `.m
 - Install Node.js: `node --version` and `npm --version`
 - Check paths in `mcp_gateway/client_config.json`
 
+**Vision: "LLaVA model not found"**
+```bash
+ollama pull llava:7b
+```
+
+**Vision: camera not opening**
+- Check device index: `python -c "import cv2; print(cv2.VideoCapture(0).isOpened())"`
+- For DroidCam: verify phone and PC are on the same WiFi, open the DroidCam app first
+
+**Audio: no sound / mic not detected**
+```bash
+# List available audio devices
+python -c "from extensions.audio.input.microphone import MicrophoneCapture; MicrophoneCapture.list_devices()"
+```
+Set the device name or index in `extensions/audio/config.yaml`.
+
+**Audio: Piper binary not found**
+- Download from [github.com/rhasspy/piper/releases](https://github.com/rhasspy/piper/releases) and put `piper` on your PATH
+- Or set the full path in `extensions/audio/config.yaml` under `tts.piper.binary`
+
 ---
 
 ## Contributing
 
 Contributions are welcome, especially:
+- New extension modules (vision sources, STT/TTS backends)
 - Tool protocol extensions (MCP/UTCP)
 - Performance improvements to the RAG pipeline
 - Documentation and design feedback
@@ -455,4 +632,4 @@ Educational and personal use. Respect website terms of service when scraping.
 
 ## Acknowledgments
 
-[Ollama](https://ollama.ai) · [FAISS](https://github.com/facebookresearch/faiss) · [BGE Embeddings](https://huggingface.co/BAAI/bge-base-en-v1.5) · [Sentence Transformers](https://sbert.net) · [Rich](https://github.com/Textualize/rich) · [BeautifulSoup](https://www.crummy.com/software/BeautifulSoup/) · [Brave Search](https://brave.com/search/api/)
+[Ollama](https://ollama.ai) · [FAISS](https://github.com/facebookresearch/faiss) · [BGE Embeddings](https://huggingface.co/BAAI/bge-base-en-v1.5) · [Sentence Transformers](https://sbert.net) · [Rich](https://github.com/Textualize/rich) · [BeautifulSoup](https://www.crummy.com/software/BeautifulSoup/) · [Brave Search](https://brave.com/search/api/) · [LLaVA](https://llava-vl.github.io) · [Moondream](https://github.com/vikhyat/moondream) · [faster-whisper](https://github.com/SYSTRAN/faster-whisper) · [Piper TTS](https://github.com/rhasspy/piper) · [Kokoro TTS](https://github.com/hexgrad/kokoro) · [openwakeword](https://github.com/dscripka/openWakeWord)
