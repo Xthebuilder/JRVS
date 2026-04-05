@@ -1,0 +1,20 @@
+[Unit]
+Description=JRVS AI Agent Web Server (Tailscale Only)
+After=network.target tailscaled.service
+Wants=tailscaled.service
+
+[Service]
+Type=simple
+User=xmanz
+WorkingDirectory=/home/xmanz/JRVS
+Environment="PATH=/usr/bin:/usr/local/bin"
+ExecStart=/usr/bin/python3 /home/xmanz/JRVS/web_server.py
+Restart=on-failure
+RestartSec=10
+
+# Security
+PrivateTmp=yes
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

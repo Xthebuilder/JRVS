@@ -1,0 +1,69 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# JRVS Audio Extension — user configuration
+# ──────────────────────────────────────────────────────────────────────────────
+# input.device examples:
+#   null              → system default microphone
+#   "USB Microphone"  → match by device name substring
+#   0                 → match by device index
+# ──────────────────────────────────────────────────────────────────────────────
+
+enabled: true
+
+input:
+  device: "Blue Yeti"    # matched by name substring via sounddevice; set JRVS_AUDIO_INPUT_DEVICE to override
+  sample_rate: 16000     # Hz preferred; falls back to device native rate with auto-resampling
+  channels: 1
+  chunk_ms: 30           # VAD frame length in milliseconds (10, 20, or 30)
+  vad_aggressiveness: 2  # 0 (least) – 3 (most aggressive filtering)
+  silence_timeout: 1.0   # seconds of silence to end utterance
+  max_duration: 30       # maximum utterance length in seconds
+
+stt:
+  backend: "whisper"
+  model: "medium"        # tiny | base | small | medium | large-v3
+  language: "en"         # ISO 639-1 code, or null for auto-detect
+  device: "cuda"         # "cpu" or "cuda"
+  compute_type: "float16"  # int8 (CPU) | float16 (GPU) | float32
+
+tts:
+  backend: "piper"       # "piper" | "kokoro" | "dia"
+  piper:
+    model: "en_US-ryan-high"
+    models_dir: "~/.local/share/piper-voices"
+    binary: "/home/xavier/bin/piper/piper"  # real binary; LD_LIBRARY_PATH set by backend
+    output_sample_rate: 22050
+  kokoro:
+    model_path: null     # null = download to ~/.cache/jrvs/kokoro
+    voice: "af_sky"
+    lang_code: "a"       # "a" = American English
+  dia:
+    model_id: "nari-labs/Dia-1.6B-0626"
+    device: "cuda"            # "cuda" or "cpu"
+    compute_dtype: "float16"  # float16 (GPU) or float32
+  speed: 1.0             # TTS speech rate multiplier
+
+conversation:
+  wake_word: null            # always-on VAD mode — just speak, no trigger needed
+  wake_word_threshold: 0.5   # openwakeword confidence threshold (0–1)
+  ack_tone: false            # no wake word, so no beep needed
+  response_prefix: ""        # optional string JRVS says before each response
+
+command_mode:
+  enabled: true
+  # Trigger phrase — say this after the wake word to enter command mode.
+  # e.g. "hey jarvis" → [ack] → "command mode" → JRVS: "Waiting for your command, sir."
+  trigger: "command mode"
+  # Stay in command mode for multiple commands until "exit" or timeout.
+  multi_command: true
+  # Seconds of silence before auto-exiting command mode.
+  timeout: 10.0
+
+# ── Ambient Listener ──────────────────────────────────────────────────────────
+# Runs as a background sense in the text CLI: continuously listens on the Blue
+# Yeti, transcribes every utterance via Whisper, and embeds it into JRVS memory
+# (SQLite + FAISS) so JARVIS can recall what was said when answering questions.
+# This does NOT generate spoken responses — it is a passive sense only.
+ambient:
+  enabled: true
+  min_transcript_words: 3    # ignore very short noise bursts (< N words)
+  log_level: "all"           # "all" | "scene" (skip near-duplicate transcripts)

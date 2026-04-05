@@ -1,0 +1,140 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/tmp",
+        "~",
+        "~/jrvs-workspace",
+        "~/Desktop"
+      ],
+      "description": "File operations — read, write, search, move files in allowed directories."
+    },
+    "sqlite": {
+      "command": "$JRVS_DIR/venv/bin/mcp-server-sqlite",
+      "args": [
+        "--db-path", "$JRVS_DIR/data/jarvis.db"
+      ],
+      "description": "Direct SQL access to JRVS memory database — query conversations, documents, chunks."
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "$GITHUB_TOKEN"
+      },
+      "description": "GitHub — search repos, read files, manage issues and PRs, view commits."
+    },
+    "sequential-thinking": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
+      "description": "Structured step-by-step reasoning for complex multi-part problems."
+    },
+    "brave-search": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+      "env": {
+        "BRAVE_API_KEY": "$BRAVE_API_KEY"
+      },
+      "description": "Web search via Brave. Set BRAVE_API_KEY in .env (https://brave.com/search/api/)"
+    },
+    "puppeteer": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-puppeteer"],
+      "env": {
+        "PUPPETEER_EXECUTABLE_PATH": "/usr/bin/chromium-browser",
+        "PUPPETEER_HEADLESS": "true"
+      },
+      "description": "Browser automation — runs headless (no visible window). Screenshots, evaluate JS, fill forms."
+    },
+    "slack": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-slack"],
+      "env": {
+        "SLACK_BOT_TOKEN": "$SLACK_BOT_TOKEN",
+        "SLACK_TEAM_ID": "$SLACK_TEAM_ID"
+      },
+      "description": "Slack — read channels, post messages, search workspace. See _setup_instructions."
+    }
+  },
+  "_disabled_servers": {
+    "memory": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-memory"],
+      "description": "DISABLED: JRVS uses its built-in FAISS/Mem0 vector store. This would create a parallel shadow store invisible to RAG retrieval."
+    },
+    "fetch": {
+      "command": "npx",
+      "args": ["-y", "mcp-fetch"],
+      "description": "DISABLED: Package broken at time of testing. JRVS built-in /scrape and /search handle URL fetching."
+    },
+    "puppeteer_old": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-puppeteer"],
+      "description": "MOVED TO ACTIVE — Chromium installed at /usr/bin/chromium-browser."
+    }
+  },
+  "_comment": "Paths support ~ (home dir) and $ENV_VARS — expanded at runtime by JRVS. BRAVE_API_KEY and GITHUB_TOKEN are read from .env.",
+  "_setup_instructions": {
+    "sqlite": {
+      "status": "READY — tested and working",
+      "tools": ["read_query", "write_query", "create_table", "list_tables", "describe_table", "append_insight"]
+    },
+    "filesystem": {
+      "status": "READY — tested and working",
+      "tools": ["read_file", "write_file", "list_directory", "create_directory", "move_file", "search_files", "get_file_info"],
+      "note": "~/Desktop added so JRVS can see your desktop files."
+    },
+    "github": {
+      "status": "READY — tested and working (26 tools)",
+      "tools": [
+        "search_repositories", "get_file_contents", "search_code",
+        "list_issues", "get_issue", "create_issue", "update_issue", "add_issue_comment",
+        "list_pull_requests", "get_pull_request", "create_pull_request",
+        "list_commits", "create_or_update_file", "push_files",
+        "create_branch", "fork_repository", "merge_pull_request"
+      ],
+      "example_prompts": [
+        "Search GitHub for Python FastAPI examples",
+        "List open issues on my JRVS repo",
+        "Show me the latest commits on Xthebuilder/JRVS-main"
+      ]
+    },
+    "sequential-thinking": {
+      "status": "READY — tested and working",
+      "tools": ["sequentialthinking"],
+      "example_prompts": [
+        "Think step by step about how to redesign my database schema",
+        "Use sequential thinking to plan a new feature"
+      ]
+    },
+    "brave-search": {
+      "status": "NEEDS API KEY IN .env",
+      "steps": [
+        "1. Add BRAVE_API_KEY=<your_key> to .env (same key you use with /search)",
+        "2. Restart JRVS"
+      ],
+      "note": "The built-in /search command works independently of this MCP server."
+    },
+    "slack": {
+      "status": "NEEDS TOKENS",
+      "steps": [
+        "1. https://api.slack.com/apps → Create New App → From scratch",
+        "2. OAuth & Permissions → Bot Token Scopes: channels:history, channels:read, chat:write, reactions:read, users:read, groups:read",
+        "3. Install to Workspace → copy xoxb-... token",
+        "4. Get Team ID from app.slack.com/client/TXXXXXXX/...",
+        "5. Paste both into the slack env fields above, restart JRVS"
+      ]
+    },
+    "puppeteer": {
+      "status": "DISABLED — needs Chromium",
+      "enable_steps": [
+        "1. sudo dnf install chromium",
+        "2. Move puppeteer from _disabled_servers to mcpServers in this file",
+        "3. Restart JRVS"
+      ]
+    }
+  }
+}

@@ -1,0 +1,103 @@
+goals:
+- id: morning_digest
+  goal: 'Check my Gmail inbox for unread emails received overnight. Summarise the
+    key topics, senders, and any action items. Create a Google Doc titled "Morning
+    Digest – {date}" with the full summary.
+
+    '
+  schedules:
+  - morning
+  tier: notify
+  enabled: true
+  slack_channel: inbox
+- id: weekly_youtube_report
+  goal: 'Analyse the YouTube channels I track for the past 7 days: top performing
+    videos, growth trend, outlier detections, and engagement score. Write a Google
+    Doc titled "Weekly YouTube Report – {date}" with the findings. Then email me the
+    summary as a digest.
+
+    '
+  schedules:
+  - weekly
+  tier: notify
+  enabled: true
+  slack_channel: research
+- id: urgent_email_watch
+  goal: 'Search Gmail for emails marked urgent, flagged, or containing words like
+    "urgent", "ASAP", "deadline", "action required" received in the last hour. For
+    each one, draft a courteous acknowledgement reply and queue it for my approval.
+
+    '
+  schedules:
+  - hourly
+  tier: confirm
+  enabled: true
+  slack_channel: inbox
+- id: weekly_trend_research
+  goal: 'Search the web and YouTube for the top trending topics in my niche (YouTube
+    growth, AI tools, content strategy). Append a weekly trends section to my running
+    "Research Notes" Google Doc, or create it if it does not exist yet.
+
+    '
+  schedules:
+  - weekly
+  tier: notify
+  enabled: true
+  slack_channel: research
+- id: daily_calendar_brief
+  goal: 'Use the JRVS calendar tool to list today''s scheduled events. For each event
+    show the time, title, and any notes. Flag any conflicts or back-to-back blocks.
+    If no events exist in the JRVS calendar, say so and suggest adding some with /event.
+    Summarise in 5 lines or fewer.
+
+    '
+  schedules:
+  - morning
+  tier: auto
+  enabled: true
+  slack_channel: calendar
+- id: end_of_day_summary
+  goal: 'Search JRVS memory for conversations from today (use today''s date in the
+    search query). Pull out any tasks mentioned, decisions made, or topics discussed.
+    List today''s calendar events using the JRVS calendar tool. Write a 1-paragraph
+    plain-English end-of-day summary to the terminal. No external tools needed — use
+    only JRVS memory and calendar.
+
+    '
+  schedules:
+  - daily
+  tier: auto
+  enabled: true
+  slack_channel: calendar
+- id: inbox_zero_check
+  goal: 'Count unread emails in Gmail. If more than 10 unread, group them by sender
+    and topic and suggest which ones to reply to, archive, or delete. Do not send
+    or delete anything — just report.
+
+    '
+  schedules:
+  - daily
+  tier: auto
+  enabled: true
+  slack_channel: inbox
+- id: draft_reply_urgent
+  goal: 'Find the most recent urgent or flagged email in Gmail. Draft a professional
+    reply acknowledging receipt and asking if anything is needed from me. Queue the
+    draft for my approval — do not send.
+
+    '
+  schedules:
+  - manual
+  tier: confirm
+  enabled: true
+  slack_channel: inbox
+- id: research_brief
+  goal: 'Search the web for the 3 most relevant recent developments in AI tools and
+    YouTube/content strategy. Write a 5-bullet brief and save it to ~/jrvs-workspace/research_brief_{date}.md
+
+    '
+  schedules:
+  - weekly
+  tier: notify
+  enabled: true
+  slack_channel: research

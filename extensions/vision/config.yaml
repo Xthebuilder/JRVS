@@ -1,0 +1,58 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# JRVS Vision Extension — user configuration
+# ──────────────────────────────────────────────────────────────────────────────
+# camera.source examples:
+#   0                                → first USB webcam
+#   1                                → second USB webcam
+#   "http://192.168.1.X:4747/video"  → DroidCam over WiFi (default port 4747)
+#   "rtsp://user:pass@192.168.1.X/stream1" → network camera RTSP
+#   "screen"                         → primary monitor (desktop screen capture)
+#   "screen:0"                       → all monitors combined
+#   "screen:2"                       → secondary monitor
+#   "screen:1:0,0,1280,720"          → cropped region on monitor 1 (x,y,w,h)
+# ──────────────────────────────────────────────────────────────────────────────
+
+enabled: true
+
+camera:
+  # DroidCam: set your phone's IP in JRVS_VISION_CAMERA_SOURCE or change this value.
+  # Default DroidCam port is 4747. Find your phone IP in the DroidCam app.
+  # e.g. "http://192.168.1.50:4747/video"
+  source: "http://192.168.1.100:4747/video"   # DroidCam over WiFi
+  fps_capture: 2               # frames attempted per second
+  motion_threshold: 0.05       # 0.0–1.0 fraction of pixels changed to trigger inference
+  periodic_interval: 30        # always infer at least once every N seconds
+  max_width: 512               # resize frames to this width before inference (speed)
+
+inference:
+  backend: "llava"             # "llava" | "moondream"
+  llava:
+    model: "llava:7b"
+    ollama_url: "http://localhost:11434"
+    timeout: 60                # seconds
+  moondream:
+    model_id: "vikhyatk/moondream2"
+    revision: "2025-01-09"
+    model_path: null           # null = download to HuggingFace cache
+  prompt: >
+    Briefly describe what you see in this image.
+    Focus on: people present, objects, activities, and the general scene.
+    Be concise (1–3 sentences).
+
+memory:
+  db_path: null                # null = auto-detect JRVS database
+  log_level: "scene"           # "all" | "scene" | "anomaly"
+                               #   all    → log every inference
+                               #   scene  → log only when scene changes noticeably
+                               #   anomaly → log only flagged anomalies
+
+anomaly:
+  enabled: true
+  window_size: 100             # rolling baseline over last N observations
+  similarity_threshold: 0.70   # cosine distance above this = anomaly
+  alert_threshold: 0.85        # anomaly score above this = alert
+
+alerts:
+  queue_size: 50
+  write_to_jrvs_events: true   # write alerts to JRVS events table
+  min_severity: "medium"       # "low" | "medium" | "high"

@@ -1,0 +1,60 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.whl
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Secrets / credentials
+.env
+.env.local
+.env.*.local
+google_token.json
+google_credentials.json
+data/google_token.json
+data/*.json
+.google_code_verifier
+
+# Data / generated
+data/mcp_logs/
+*.db
+*.sqlite
+faiss_indexes/*.index
+faiss_indexes/*.meta.json
+thumbnails/
+models/
+logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+node_modules
+
+# Auto-generated
+unsloth_compiled_cache/
+next-env.d.ts
+.next/
+output/
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Data directories
+data/
+uploads/
