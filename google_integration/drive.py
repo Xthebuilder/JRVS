@@ -73,7 +73,7 @@ class GoogleDriveClient:
             query += f" and modifiedTime > '{ts}'"
 
         try:
-            resp = self._get_service().files().list(
+            resp = svc.files().list(
                 q=query,
                 pageSize=max_results,
                 fields="files(id,name,mimeType,modifiedTime)",

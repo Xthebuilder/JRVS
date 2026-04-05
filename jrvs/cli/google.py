@@ -994,7 +994,7 @@ def _ai_generate_content(topic: str, extra_instruction: str = "") -> str:
     try:
         from jrvs.embeddings.vector_store import VectorStore
         from jrvs.embeddings.encoder import EmbeddingEncoder
-        encoder = EmbeddingEncoder.get()
+        EmbeddingEncoder.get()  # ensure encoder singleton is initialised before VectorStore.search
         vs = VectorStore()
         results = vs.search(topic, top_k=5)
         if results:

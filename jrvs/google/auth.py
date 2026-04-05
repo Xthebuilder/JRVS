@@ -83,7 +83,7 @@ def get_credentials():
 def run_auth_flow() -> None:
     """Force a fresh OAuth2 consent flow and save the token."""
     Config.ensure_dirs()
-    creds = get_credentials()
+    get_credentials()
     log.info("Google OAuth2 authorisation successful")
     print(f"✓ Authorised. Token saved to: {Config.GOOGLE_TOKEN_FILE}")
 

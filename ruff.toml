@@ -1,0 +1,10 @@
+target-version = "py312"
+
+[lint]
+# F = Pyflakes: undefined names, unused imports, dead code — actual bugs
+# E/W style rules intentionally excluded to avoid blocking on pre-existing style debt
+select = ["F"]
+ignore = [
+    "F401",  # unused imports — too noisy across the codebase, handle manually
+    "F841",  # unused variables — handle manually, some are intentional (progress handles)
+]

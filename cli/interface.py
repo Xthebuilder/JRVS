@@ -571,7 +571,7 @@ class JarvisCLI:
             try:
                 await vibe_checker.vibe_check(response)
             except SecurityException as sec_exc:
-                return f"Response blocked — output contained injected content."
+                return "Response blocked — output contained injected content."
 
             # Persist to memory
             conv_id = await db.add_conversation(
@@ -599,7 +599,7 @@ class JarvisCLI:
             return response
 
         except Exception as exc:
-            log.error("Slack chat handler error: %s", exc)
+            logger.error("Slack chat handler error: %s", exc)
             return f"Something went wrong: {exc}"
 
     def _signal_handler(self, signum, frame):
@@ -690,8 +690,8 @@ class JarvisCLI:
     async def scrape_url(self, url: str):
         """Scrape a URL and add to knowledge base"""
         with theme.show_progress(f"Scraping {url}...") as progress:
-            task = progress.add_task("", total=None)
-            
+            progress.add_task("", total=None)
+
             doc_id = await web_scraper.scrape_and_store(url)
             
             if doc_id:
@@ -1660,7 +1660,7 @@ class JarvisCLI:
             theme.print_info('  /schedule every Friday at 5pm summarise my week')
             return
 
-        theme.print_success(f"Scheduled action created — waiting for your approval:")
+        theme.print_success("Scheduled action created — waiting for your approval:")
         theme.console.print(f"  ID          : [bold]{job['id']}[/bold]")
         theme.console.print(f"  Description : {job['description']}")
         theme.console.print(f"  Action      : {job['action']}")
@@ -1759,7 +1759,6 @@ class JarvisCLI:
             "/models": "List available Ollama models",
             "/switch <model>": "Switch to a different model",
             "/scrape <url>": "Scrape a website and add to knowledge base",
-            "/search <query>": "Search stored documents",
             "/calendar": "Show upcoming events (7 days)",
             "/month [month] [year]": "Show ASCII calendar for month (default: current)",
             "/today": "Show today's events",

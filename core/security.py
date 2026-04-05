@@ -331,8 +331,6 @@ class VibeChecker:
 
         return top_sim
 
-        return max_sim
-
 
 # ---------------------------------------------------------------------------
 # Module-level singleton

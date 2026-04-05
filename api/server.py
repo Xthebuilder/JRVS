@@ -1313,5 +1313,5 @@ async def get_resources():
 
 if __name__ == "__main__":
     import uvicorn
-    from config import JRVS_SERVER_PORT
-    uvicorn.run(app, host="0.0.0.0", port=JRVS_SERVER_PORT)
+    from config import JRVS_SERVER_HOST, JRVS_SERVER_PORT
+    uvicorn.run(app, host=JRVS_SERVER_HOST, port=JRVS_SERVER_PORT)
