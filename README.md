@@ -693,7 +693,9 @@ Please open an issue before large changes to align on direction.
 
 ## License
 
-Educational and personal use. Respect website terms of service when scraping.
+[Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)](LICENSE)
+
+Free to use, modify, and share for personal and non-commercial purposes. You must give credit. You may not use this project or derivatives of it for commercial purposes. Respect website terms of service when scraping.
 
 ## Acknowledgments
 
