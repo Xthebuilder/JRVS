@@ -9,6 +9,8 @@ dist/
 build/
 .eggs/
 *.whl
+.ruff_cache/
+.pytest_cache/
 
 # Virtual environment
 .venv/
@@ -54,6 +56,10 @@ output/
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Business / strategy docs — keep off GitHub
+MARKETPLACE_LISTING.md
+POSITIONING.md
 
 # Data directories
 data/

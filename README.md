@@ -1,38 +1,73 @@
-# JRVS — Local-First AI Agent Framework
+# JRVS — Self-Hosted AI Operations Assistant
 
-JRVS is a RAG-powered CLI AI assistant built for developers who want **explicit control, predictable behavior, and extensible architecture** when working with local language models.
+Your team needs AI for the routine work — inbox triage, research digests, document drafting, calendar summaries. But ChatGPT and Claude.ai are off the table. Legal says no. Compliance says no. Your data policy says no.
 
-> **Designed for privacy-sensitive, offline, or resource-constrained environments** — not cloud-scale SaaS.
+**JRVS is a self-hosted AI operations assistant for teams that need Google Workspace automation with a full audit trail — and can't send that data to OpenAI.**
 
----
-
-## Why JRVS?
-
-Most agent frameworks optimize for hosted APIs and rapid abstraction. JRVS is optimized for a different set of constraints:
-
-- **Local inference** — CPU/GPU, quantized models, limited memory
-- **Offline or privacy-sensitive workflows** — no data leaves your machine
-- **Explicit control** — over tools, memory, retrieval, and context
-- **Extensibility without tight coupling** — via MCP, UTCP, and the new Extensions system
+It runs on your servers. Inference happens on your hardware. Nothing leaves your building.
 
 ---
 
-## Features
+## Who It's For
+
+Teams of 10–100 in regulated industries — healthcare, legal, financial services, government contracting — where someone (you) is responsible for keeping AI useful without creating a compliance incident.
+
+You already live in Google Workspace. You have one IT person and Docker. You don't need a six-figure Microsoft Copilot contract. You need an AI that handles the boring-but-sensitive recurring work automatically, keeps a record of what it did, and never touches an external API.
+
+---
+
+## What Makes JRVS Different
+
+### 1. Nothing leaves your server
+JRVS connects to local model backends — Ollama or LM Studio — so inference runs on your hardware. No OpenAI API key. No telemetry. The compliance story is one sentence: the data never left.
+
+### 2. Autonomous agents with approval tiers
+JRVS runs scheduled tasks in the background — morning inbox digest, urgent email watch, weekly research brief — without you being at the keyboard. Each task has a trust tier you configure:
+
+- **auto** — executes silently (low-risk reads and summaries)
+- **notify** — executes and reports back via Slack or terminal
+- **confirm** — drafts the output and waits for your approval before acting
+
+Nothing sends an email or modifies a document without the tier you set allowing it.
+
+### 3. Google Workspace integration with a structured audit log
+Every write action JRVS takes — sending an email, creating a Doc, updating a Sheet — is logged twice: once before execution (intent) and once after (result), with timestamps and session IDs, in a rotating JSON log on your server. Your compliance team can read and export it.
+
+---
+
+## What It Can Do Today
 
 | Category | Capability |
 |----------|-----------|
-| **LLM Backends** | Ollama, LM Studio (switchable at runtime) |
+| **Scheduled Agents** | Morning digest, urgent email watch, weekly research brief, end-of-day summary — runs on your schedule |
+| **Google Workspace** | Read/write Gmail, Drive, Docs, Sheets — with full audit trail on every write |
+| **Audit Logging** | JSON intent+result log for all write actions, rotating file, exportable |
+| **Local Inference** | Ollama, LM Studio — switchable at runtime, no cloud dependency |
 | **RAG Pipeline** | FAISS + BGE embeddings + cross-encoder reranking + MMR diversity |
-| **Memory** | SQLite persistent memory, cross-session FAISS retrieval |
+| **Memory** | SQLite persistent memory, cross-session retrieval |
 | **Web Search** | Brave Search API with auto-ingest into knowledge base |
-| **Web Scraping** | BeautifulSoup scraper with dedup and chunking |
 | **File Uploads** | Drop files in `uploads/` and ingest into knowledge base |
 | **MCP** | Full MCP client + server (17+ tools) |
-| **UTCP** | Universal Tool Calling Protocol via REST API |
-| **Web UI** | Optional browser-based chat interface |
-| **API Server** | FastAPI server for programmatic access |
+| **API Server** | FastAPI server with bearer-token auth for programmatic access |
 | **Vision Extension** | Camera capture, LLaVA/Moondream inference, anomaly detection |
 | **Audio Extension** | Wake word → Whisper STT → JRVS → Piper/Kokoro TTS |
+
+---
+
+## Licensing
+
+| | Community | Professional | Team |
+|---|---|---|---|
+| Self-hosted | Yes | Yes | Yes |
+| Commercial use | No | Yes | Yes |
+| Email support | No | Yes | Yes |
+| Monthly 1-on-1 with creator | No | No | Yes |
+| Custom goal configuration | No | No | Yes |
+| **Price** | Free | $149 one-time | $499/mo |
+
+> SSO/SAML and multi-user team management are on the roadmap. [See ENTERPRISE.md](./ENTERPRISE.md) for details.
+
+Community use is free under [CC BY-NC 4.0](LICENSE). Commercial use requires a Professional or Team license.
 
 ---
 

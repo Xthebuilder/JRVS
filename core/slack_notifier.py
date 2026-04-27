@@ -147,3 +147,109 @@ async def notify_async(text: str, channel_key: Optional[str] = None) -> bool:
     return await asyncio.get_event_loop().run_in_executor(
         None, lambda: notify(text, channel_key)
     )
+
+
+def send_approval_request(
+    action_id: str,
+    tool: str,
+    args: dict,
+    reason: str,
+    goal_id: str,
+    channel_key: Optional[str] = None,
+) -> dict:
+    """
+    Post an interactive Slack Block Kit message with Approve / Deny buttons.
+
+    Returns {"ts": message_timestamp, "channel": channel_id} on success,
+    or {"ts": "", "channel": ""} on failure.
+    """
+    token = os.environ.get("SLACK_BOT_TOKEN", "")
+    if not token or token.startswith("xoxb-YOUR"):
+        log.debug("slack_notifier: no token configured, skipping approval request.")
+        return {"ts": "", "channel": ""}
+
+    resolved_key = channel_key or "alerts"
+    channel = get_channel(resolved_key)
+
+    args_text = json.dumps(args, indent=2) if args else "{}"
+    if len(args_text) > 400:
+        args_text = args_text[:400] + "\n…"
+
+    blocks = [
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": ":bell: JARVIS Approval Needed", "emoji": True},
+        },
+        {
+            "type": "section",
+            "fields": [
+                {"type": "mrkdwn", "text": f"*Tool:*\n`{tool}`"},
+                {"type": "mrkdwn", "text": f"*Goal:*\n`{goal_id}`"},
+            ],
+        },
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"*Reason:*\n{reason or 'No reason provided'}"},
+        },
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"*Arguments:*\n```{args_text}```"},
+        },
+        {
+            "type": "actions",
+            "elements": [
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "✅ Approve", "emoji": True},
+                    "style": "primary",
+                    "action_id": f"approve_{action_id}",
+                    "value": action_id,
+                },
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "❌ Deny", "emoji": True},
+                    "style": "danger",
+                    "action_id": f"deny_{action_id}",
+                    "value": action_id,
+                },
+            ],
+        },
+    ]
+
+    payload = json.dumps({"channel": channel, "blocks": blocks}).encode()
+    try:
+        req = urllib.request.Request(
+            _API_URL,
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            result = json.loads(resp.read())
+
+        if not result.get("ok"):
+            log.warning("slack_notifier: approval post failed: %s", result.get("error"))
+            return {"ts": "", "channel": ""}
+
+        return {"ts": result.get("ts", ""), "channel": result.get("channel", "")}
+    except Exception as exc:
+        log.warning("slack_notifier: failed to send approval request: %s", exc)
+        return {"ts": "", "channel": ""}
+
+
+async def send_approval_request_async(
+    action_id: str,
+    tool: str,
+    args: dict,
+    reason: str,
+    goal_id: str,
+    channel_key: Optional[str] = None,
+) -> dict:
+    """Async wrapper for send_approval_request."""
+    import asyncio
+    return await asyncio.get_event_loop().run_in_executor(
+        None,
+        lambda: send_approval_request(action_id, tool, args, reason, goal_id, channel_key),
+    )

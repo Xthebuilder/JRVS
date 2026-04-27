@@ -9,10 +9,15 @@ import base64
 import json
 import logging
 import asyncio
+from collections import deque
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, asdict
+
+# Cap on in-memory session_log entries. The daemon runs 24/7, so an unbounded
+# list would grow forever; a deque drops the oldest entry on overflow.
+_SESSION_LOG_MAX = 1000
 
 log = logging.getLogger(__name__)
 
@@ -73,7 +78,9 @@ class MCPAgent:
     def __init__(self, log_dir: str = "data/mcp_logs"):
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
-        self.session_log: List[ActionLog] = []
+        # Bounded deque — oldest entries drop automatically when full.
+        # Prevents unbounded memory growth on a long-running daemon.
+        self.session_log: deque = deque(maxlen=_SESSION_LOG_MAX)
         self._llm_client = None   # set by CLI after startup
 
     # ------------------------------------------------------------------

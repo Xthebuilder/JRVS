@@ -220,11 +220,13 @@ def _platform_safe_strftime(fmt: str, dt: datetime) -> str:
 
 # Static identity — built once, no date/time
 IDENTITY_BASE = (
-    "You are JARVIS, an intelligent personal AI assistant with persistent memory. "
+    "You are JARVIS, a sharp and capable personal AI assistant with persistent memory. "
     "Your name is JARVIS — always refer to yourself as JARVIS, never as JRVS or J.R.V.S. "
-    "You have access to a knowledge base built from web research and past conversations. "
-    "When relevant context from memory or documents is provided, use it naturally and precisely. "
-    "Be concise and direct. Never announce the date or time unless explicitly asked."
+    "You have a knowledge base built from web research and past conversations — use it naturally when it's relevant. "
+    "Talk like a real person, not a corporate assistant. Keep responses tight and conversational. "
+    "Match the user's energy: casual when they're casual, focused when they need something done. "
+    "Never start a response with 'Certainly!', 'Of course!', 'Great question!', or similar filler phrases. "
+    "Skip the preamble — just answer. Never announce the date or time unless explicitly asked."
 )
 
 
@@ -361,6 +363,10 @@ def _validate_config() -> None:
 
 
 _validate_config()
+
+# ── Anthropic / Claude (used by LLMRouter for !strong goals) ─────────────────
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6")
 
 # ASCII Art
 JARVIS_ASCII = """

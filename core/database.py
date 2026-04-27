@@ -176,6 +176,39 @@ class Database:
             )
         """)
 
+        # Goal state — persists long-running goal execution across restarts
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS goal_state (
+                goal_id        TEXT PRIMARY KEY,
+                status         TEXT NOT NULL DEFAULT 'idle',
+                run_id         TEXT,
+                plan_json      TEXT NOT NULL DEFAULT '[]',
+                step_cursor    INTEGER NOT NULL DEFAULT 0,
+                retry_count    INTEGER NOT NULL DEFAULT 0,
+                last_error     TEXT DEFAULT '',
+                started_at     TIMESTAMP,
+                updated_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                context_json   TEXT NOT NULL DEFAULT '{}'
+            )
+        """)
+
+        # Pending CONFIRM-tier approvals waiting for Slack button response
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS pending_approvals (
+                action_id      TEXT PRIMARY KEY,
+                goal_id        TEXT NOT NULL,
+                run_id         TEXT NOT NULL,
+                step_num       INTEGER NOT NULL,
+                tool           TEXT NOT NULL,
+                args_json      TEXT NOT NULL DEFAULT '{}',
+                reason         TEXT DEFAULT '',
+                slack_ts       TEXT,
+                slack_channel  TEXT,
+                status         TEXT NOT NULL DEFAULT 'awaiting',
+                created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
         # Create indexes for performance
         await db.execute("CREATE INDEX IF NOT EXISTS idx_conversations_session ON conversations(session_id)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_conversations_embedded ON conversations(embedded)")
@@ -183,6 +216,8 @@ class Database:
         await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_documents_url_unique ON documents(url) WHERE url IS NOT NULL AND url != ''")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_chunks_document ON document_chunks(document_id)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_events_date ON events(event_date)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_goal_state_status ON goal_state(status)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_pending_approvals_status ON pending_approvals(status)")
 
     # ------------------------------------------------------------------
     # Migration system
@@ -200,6 +235,7 @@ class Database:
             ("m002_drop_conversations_embedding_vector", self._m002_drop_conversations_embedding_vector),
             ("m003_drop_chunks_embedding_vector", self._m003_drop_chunks_embedding_vector),
             ("m004_add_documents_mem0_synced", self._m004_add_documents_mem0_synced),
+            ("m005_add_goal_state_tables", self._m005_add_goal_state_tables),
         ]
 
         for name, fn in migrations:
@@ -629,6 +665,124 @@ class Database:
                 INSERT INTO training_runs (completed_at, examples_used, final_loss, model_path, status)
                 VALUES (CURRENT_TIMESTAMP, ?, ?, ?, ?)
             """, (examples_used, final_loss, model_path, status))
+            await db.commit()
+
+    @staticmethod
+    async def _m005_add_goal_state_tables(db) -> None:
+        """Add goal_state and pending_approvals tables for the unified agent loop."""
+        cur = await db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='goal_state'")
+        if not await cur.fetchone():
+            await db.execute("""
+                CREATE TABLE goal_state (
+                    goal_id TEXT PRIMARY KEY, status TEXT NOT NULL DEFAULT 'idle',
+                    run_id TEXT, plan_json TEXT NOT NULL DEFAULT '[]',
+                    step_cursor INTEGER NOT NULL DEFAULT 0,
+                    retry_count INTEGER NOT NULL DEFAULT 0,
+                    last_error TEXT DEFAULT '', started_at TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    context_json TEXT NOT NULL DEFAULT '{}'
+                )
+            """)
+        cur = await db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='pending_approvals'")
+        if not await cur.fetchone():
+            await db.execute("""
+                CREATE TABLE pending_approvals (
+                    action_id TEXT PRIMARY KEY, goal_id TEXT NOT NULL,
+                    run_id TEXT NOT NULL, step_num INTEGER NOT NULL,
+                    tool TEXT NOT NULL, args_json TEXT NOT NULL DEFAULT '{}',
+                    reason TEXT DEFAULT '', slack_ts TEXT, slack_channel TEXT,
+                    status TEXT NOT NULL DEFAULT 'awaiting',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+    # ------------------------------------------------------------------
+    # Goal state
+    # ------------------------------------------------------------------
+
+    async def upsert_goal_state(self, goal_id: str, fields: dict) -> None:
+        """Insert or partially update a goal_state row."""
+        fields["updated_at"] = datetime.utcnow().isoformat()
+        async with _open_db(self.db_path) as db:
+            cur = await db.execute("SELECT goal_id FROM goal_state WHERE goal_id = ?", (goal_id,))
+            existing = await cur.fetchone()
+            if existing:
+                set_clause = ", ".join(f"{k} = ?" for k in fields)
+                await db.execute(
+                    f"UPDATE goal_state SET {set_clause} WHERE goal_id = ?",
+                    [*fields.values(), goal_id],
+                )
+            else:
+                fields["goal_id"] = goal_id
+                cols = ", ".join(fields.keys())
+                placeholders = ", ".join("?" for _ in fields)
+                await db.execute(
+                    f"INSERT INTO goal_state ({cols}) VALUES ({placeholders})",
+                    list(fields.values()),
+                )
+            await db.commit()
+
+    async def get_goal_state(self, goal_id: str) -> Optional[Dict]:
+        """Return the goal_state row for goal_id, or None."""
+        async with _open_db(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cur = await db.execute("SELECT * FROM goal_state WHERE goal_id = ?", (goal_id,))
+            row = await cur.fetchone()
+            return dict(row) if row else None
+
+    async def list_goal_states(self, status: Optional[str] = None) -> List[Dict]:
+        """List all goal_state rows, optionally filtered by status."""
+        async with _open_db(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            if status:
+                cur = await db.execute(
+                    "SELECT * FROM goal_state WHERE status = ? ORDER BY updated_at DESC", (status,)
+                )
+            else:
+                cur = await db.execute("SELECT * FROM goal_state ORDER BY updated_at DESC")
+            rows = await cur.fetchall()
+            return [dict(r) for r in rows]
+
+    async def count_unprocessed_feedback(self) -> int:
+        """Count feedback rows not yet processed by the training loop."""
+        async with _open_db(self.db_path) as db:
+            cur = await db.execute("SELECT COUNT(*) FROM feedback WHERE processed = 0")
+            row = await cur.fetchone()
+            return row[0] if row else 0
+
+    # ------------------------------------------------------------------
+    # Pending approvals (CONFIRM-tier Slack buttons)
+    # ------------------------------------------------------------------
+
+    async def save_pending_approval(self, row: dict) -> None:
+        async with _open_db(self.db_path) as db:
+            await db.execute("""
+                INSERT OR REPLACE INTO pending_approvals
+                (action_id, goal_id, run_id, step_num, tool, args_json, reason,
+                 slack_ts, slack_channel, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                row["action_id"], row["goal_id"], row["run_id"], row["step_num"],
+                row["tool"], row["args_json"], row.get("reason", ""),
+                row.get("slack_ts"), row.get("slack_channel"), "awaiting",
+            ))
+            await db.commit()
+
+    async def get_pending_approval(self, action_id: str) -> Optional[Dict]:
+        async with _open_db(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cur = await db.execute(
+                "SELECT * FROM pending_approvals WHERE action_id = ?", (action_id,)
+            )
+            row = await cur.fetchone()
+            return dict(row) if row else None
+
+    async def update_approval_status(self, action_id: str, status: str) -> None:
+        async with _open_db(self.db_path) as db:
+            await db.execute(
+                "UPDATE pending_approvals SET status = ? WHERE action_id = ?",
+                (status, action_id),
+            )
             await db.commit()
 
     async def cleanup_old_data(self, days: int = 30):

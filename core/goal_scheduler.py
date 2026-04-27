@@ -329,11 +329,10 @@ class GoalScheduler:
     # ------------------------------------------------------------------
 
     async def _execute_goal(self, goal: Dict[str, Any]) -> str:
-        """Run a single goal dict through the LLM and return a summary."""
+        """Run a single goal dict through the unified AgentLoop."""
         gid = goal.get("id", "unknown")
         goal_text = goal.get("goal", "").strip()
-        tier = goal.get("tier", "auto")
-        slack_channel = goal.get("slack_channel")  # None = auto-route by content
+        slack_channel = goal.get("slack_channel")
 
         if not goal_text:
             return f"Goal '{gid}' has no goal text."
@@ -341,89 +340,60 @@ class GoalScheduler:
         # Substitute {date} placeholder
         goal_text = goal_text.replace("{date}", datetime.now().strftime("%Y-%m-%d"))
 
-        # Goals at 'confirm' tier require human approval — skip in auto mode
-        if tier == "confirm":
-            log.debug(
-                "Goal '%s' has tier=confirm — skipping automatic execution. "
-                "Run manually with /agent run %s to review and approve.",
-                gid, gid,
-            )
-            # Still mark as run so the hourly/daily guard doesn't fire again immediately
-            self._last_run[gid] = datetime.now()
-            self._last_run_date[gid] = datetime.now().date()
-            return (
-                f"Goal '{gid}' requires confirmation (tier=confirm). "
-                f"Run /agent run {gid} to execute it interactively."
-            )
-
-        # Check if Google Workspace is needed but not available
-        google_keywords = ["gmail", "google doc", "google sheet", "drive", "email"]
-        needs_google = any(kw in goal_text.lower() for kw in google_keywords)
-        if needs_google:
-            try:
-                from google_integration.client import google_workspace
-                if not google_workspace.auth.is_authenticated():
-                    return (
-                        f"Goal '{gid}' requires Google Workspace but you are not authenticated. "
-                        "Run /google-auth to set up credentials."
-                    )
-            except Exception:
-                return f"Goal '{gid}' requires Google Workspace (not configured)."
-
-        # Build system prompt for goal execution
-        system_prompt = (
-            "You are JARVIS executing an autonomous goal. "
-            "Be concise and action-oriented. "
-            "If you cannot complete a step, explain why briefly and continue with what you can do. "
-            "Return a short summary of what was accomplished."
-        )
-
         try:
-            # First pass: use MCP agent for any tool calls needed
-            from mcp_gateway.agent import mcp_agent
-            agent_result = await mcp_agent.process_request(goal_text)
+            from agent.loop import get_agent_loop
+            from llm.router import LLMRouter
 
-            # Build context from tool results
-            context_parts = []
-            if agent_result.get("tool_results"):
-                for tr in agent_result["tool_results"]:
-                    if tr.get("success") and tr.get("result"):
-                        context_parts.append(
-                            f"Tool {tr['server']}/{tr['tool']}:\n{str(tr['result'])[:2000]}"
-                        )
+            agent_loop = get_agent_loop()
+            if agent_loop is None:
+                # Fallback: AgentLoop not yet initialised (startup race)
+                return f"Goal '{gid}' skipped — AgentLoop not initialised yet."
 
-            context = "\n\n".join(context_parts)
+            # Wrap the LLM client in a router so !strong prefix is honoured
+            backend = self._llm_client
+            if not isinstance(backend, LLMRouter):
+                backend = LLMRouter(local=backend)
 
-            # Second pass: generate a summary response
-            response = await self._client.generate(
-                prompt=goal_text,
-                context=context,
-                stream=False,
-                system_prompt=system_prompt,
+            result = await agent_loop.run_goal(
+                goal_id=gid,
+                goal_text=goal_text,
+                backend=backend,
             )
 
             self._last_run[gid] = datetime.now()
             self._last_run_date[gid] = datetime.now().date()
 
-            result = response or f"Goal '{gid}' executed (no response generated)."
+            summary = (
+                f"completed ({result.steps_ok} steps)"
+                if result.status == "completed"
+                else f"{result.status}: {result.error[:200]}" if result.error
+                else result.status
+            )
 
             from core.slack_notifier import notify_async
-            await notify_async(
-                f":robot_face: *Goal completed* — `{gid}`\n{result[:400]}",
-                channel_key=slack_channel,
-            )
+            if result.status == "completed":
+                await notify_async(
+                    f":robot_face: *Goal completed* — `{gid}`\n{summary}",
+                    channel_key=slack_channel,
+                )
+            elif result.status not in ("awaiting_approval",):
+                await notify_async(
+                    f":x: *Goal failed* — `{gid}`\n{result.error[:300]}",
+                    channel_key="alerts",
+                )
 
-            return result
+            # Phase 6: check if self-improvement retraining should be queued
+            await _check_retrain_threshold(self._llm_client)
+
+            return summary
 
         except Exception as exc:
             log.error("Goal '%s' execution failed: %s", gid, exc, exc_info=True)
-
             from core.slack_notifier import notify_async
             await notify_async(
                 f":x: *Goal failed* — `{gid}`\nError: {exc}",
                 channel_key="alerts",
             )
-
             return f"Goal '{gid}' failed: {exc}"
 
 
@@ -533,3 +503,50 @@ class GoalScheduler:
 
 # Global singleton
 goal_scheduler = GoalScheduler()
+
+
+# ── Self-improvement: auto-queue retraining ───────────────────────────────────
+
+_retrain_queued = False
+
+
+async def _check_retrain_threshold(llm_client=None) -> None:
+    """
+    Queue a retraining run if unprocessed feedback >= TRAIN_THRESHOLD.
+    Writes a sentinel file that the 2am cron job picks up.
+    Only queues once per process lifetime to avoid repeated triggers.
+    """
+    global _retrain_queued
+    if _retrain_queued:
+        return
+
+    try:
+        from core.database import db as _db
+        count = await _db.count_unprocessed_feedback()
+
+        # Import threshold from feedback_loop config
+        try:
+            from feedback_loop import TRAIN_THRESHOLD
+        except ImportError:
+            TRAIN_THRESHOLD = 30
+
+        if count >= TRAIN_THRESHOLD:
+            sentinel = Path(__file__).parent.parent / "data" / "retrain_queued"
+            sentinel.parent.mkdir(exist_ok=True)
+            sentinel.write_text(
+                f"Queued at {datetime.now().isoformat()} — {count} unprocessed feedback items\n"
+            )
+            _retrain_queued = True
+            log.info(
+                "_check_retrain_threshold: %d feedback items >= threshold %d — "
+                "retraining queued (sentinel: %s)",
+                count, TRAIN_THRESHOLD, sentinel,
+            )
+            from core.slack_notifier import notify_async
+            await notify_async(
+                f":brain: *JARVIS self-improvement triggered* — "
+                f"{count} feedback items queued for tonight's retraining run.",
+                channel_key="alerts",
+            )
+    except Exception as exc:
+        log.debug("_check_retrain_threshold: %s", exc)

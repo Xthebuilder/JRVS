@@ -95,7 +95,7 @@ class SlackListener:
             return None
         try:
             req = urllib.request.Request(
-                f"https://slack.com/api/conversations.list?limit=200",
+                "https://slack.com/api/conversations.list?limit=200",
                 headers={"Authorization": f"Bearer {token}"},
             )
             with urllib.request.urlopen(req, timeout=10) as resp:
@@ -198,6 +198,89 @@ class SlackListener:
         await self._remove_reaction(channel, event.get("ts", ""), "thinking_face")
         await self._send_reply(channel, thread_ts, response)
 
+    async def _handle_interactive(self, payload: dict) -> None:
+        """Handle Slack interactive payloads (button clicks for approvals)."""
+        actions = payload.get("actions", [])
+        if not actions:
+            return
+
+        action = actions[0]
+        action_id: str = action.get("action_id", "")
+        value: str = action.get("value", "")
+
+        # Determine approve/deny from the action_id prefix
+        if action_id.startswith("approve_"):
+            approved = True
+        elif action_id.startswith("deny_"):
+            approved = False
+        else:
+            return
+
+        log.info(
+            "SlackListener: button %s clicked for action_id=%s",
+            "approve" if approved else "deny", value[:8],
+        )
+
+        # Route to autonomous_researcher first if it owns this approval,
+        # otherwise fall through to AgentLoop.
+        routed = False
+        try:
+            from autonomous_research import autonomous_researcher
+            if autonomous_researcher.owns_approval(value):
+                await autonomous_researcher.handle_approval(value, approved)
+                routed = True
+        except Exception as exc:
+            log.error("SlackListener: autonomous_researcher approval error: %s", exc)
+
+        if not routed:
+            try:
+                from agent.loop import get_agent_loop
+                loop = get_agent_loop()
+                if loop:
+                    await loop.handle_approval(value, approved)
+                else:
+                    log.warning("SlackListener: AgentLoop not initialised — cannot process approval")
+            except Exception as exc:
+                log.error("SlackListener: error processing approval: %s", exc)
+                return
+
+        # Update the Slack message to show result
+        channel = payload.get("channel", {}).get("id", "")
+        message_ts = payload.get("message", {}).get("ts", "")
+        verdict_text = "✅ Approved" if approved else "❌ Denied"
+        if channel and message_ts:
+            await self._update_message(channel, message_ts, verdict_text)
+
+    async def _update_message(self, channel: str, ts: str, verdict: str) -> None:
+        """Update an existing Slack message after approval/denial."""
+        import urllib.request, json
+        token = _bot_token()
+        if not token:
+            return
+        payload = json.dumps({
+            "channel": channel,
+            "ts": ts,
+            "text": f"JARVIS approval request — {verdict}",
+            "blocks": [
+                {
+                    "type": "section",
+                    "text": {"type": "mrkdwn", "text": f"JARVIS approval request — *{verdict}*"},
+                }
+            ],
+        }).encode()
+        try:
+            req = urllib.request.Request(
+                "https://slack.com/api/chat.update",
+                data=payload,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json",
+                },
+            )
+            urllib.request.urlopen(req, timeout=5)
+        except Exception as exc:
+            log.debug("SlackListener: could not update message: %s", exc)
+
     async def _add_reaction(self, channel: str, ts: str, emoji: str) -> None:
         import urllib.request, json
         token = _bot_token()
@@ -266,6 +349,8 @@ class SlackListener:
             )
             if req.type == "events_api":
                 asyncio.create_task(self._handle_event(req.payload))
+            elif req.type == "interactive":
+                asyncio.create_task(self._handle_interactive(req.payload))
 
         socket_client.socket_mode_request_listeners.append(_process)
 

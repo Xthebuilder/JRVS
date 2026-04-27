@@ -27,6 +27,66 @@ setup_logging()
 log = logging.getLogger("jarvis.daemon")
 
 
+# ── Retry / backoff constants ────────────────────────────────────────────────
+INIT_RETRY_BASE = 5        # first retry after 5s
+INIT_RETRY_MAX  = 120      # cap at 2 minutes between retries
+INIT_RETRY_LIMIT = None    # None = retry forever (systemd is the real watchdog)
+
+
+async def _init_with_backoff(cli, max_attempts=INIT_RETRY_LIMIT) -> None:
+    """Try cli.initialize() with exponential backoff until it succeeds.
+
+    Ollama or the network may not be ready when systemd starts the unit,
+    so we retry instead of dying on the first failure.
+    """
+    attempt = 0
+    delay = INIT_RETRY_BASE
+    while True:
+        attempt += 1
+        try:
+            ok = await cli.initialize()
+            if ok:
+                return
+            # initialize() returned False — component not ready
+            raise RuntimeError("cli.initialize() returned False")
+        except Exception as exc:
+            if max_attempts and attempt >= max_attempts:
+                log.error("Giving up after %d attempts: %s", attempt, exc)
+                raise
+            log.warning(
+                "Initialization attempt %d failed (%s) — retrying in %ds…",
+                attempt, exc, delay,
+            )
+            await asyncio.sleep(delay)
+            delay = min(delay * 2, INIT_RETRY_MAX)
+
+
+async def _supervise(name: str, coro_factory, *, max_backoff: int = 120):
+    """Run coro_factory() in a loop, restarting on crash with backoff.
+
+    coro_factory is a zero-arg callable that returns a fresh coroutine
+    each time (we can't re-await a spent coroutine).
+    """
+    delay = 5
+    while True:
+        try:
+            log.info("supervisor: starting %s", name)
+            await coro_factory()
+            # If the coroutine returns normally, it shut down cleanly
+            log.info("supervisor: %s exited cleanly", name)
+            return
+        except asyncio.CancelledError:
+            log.info("supervisor: %s cancelled", name)
+            return
+        except Exception as exc:
+            log.error(
+                "supervisor: %s crashed (%s) — restarting in %ds…",
+                name, exc, delay,
+            )
+            await asyncio.sleep(delay)
+            delay = min(delay * 2, max_backoff)
+
+
 async def main() -> None:
     log.info("JARVIS daemon starting…")
 
@@ -37,32 +97,69 @@ async def main() -> None:
     cli.llm_client = ollama_client
     cli.llm_provider = "ollama"
 
-    ok = await cli.initialize()
-    if not ok:
-        log.error("CLI initialization failed — check Ollama is running")
+    try:
+        await _init_with_backoff(cli)
+    except Exception:
+        log.critical("JARVIS daemon could not initialize — exiting.")
         sys.exit(1)
 
     log.info("JARVIS CLI stack ready.")
 
-    # Start API server (non-blocking)
+    # ── Supervised background tasks ──────────────────────────────────────
+    #
+    # If uvicorn or the Slack listener crash, the supervisor restarts them
+    # with exponential backoff rather than letting them die silently.
+
+    # --- API server (uvicorn) ---
     import uvicorn
     from api.server import app
-    uv_config = uvicorn.Config(
-        app, host="127.0.0.1", port=8000,
-        log_level="warning", lifespan="off",
-    )
-    uv_server = uvicorn.Server(uv_config)
-    asyncio.create_task(uv_server.serve())
-    log.info("API server running on :8000")
 
-    # Wire Slack listener directly to the CLI's chat handler
+    def _make_uvicorn_coro():
+        cfg = uvicorn.Config(
+            app, host="127.0.0.1", port=8000,
+            log_level="warning", lifespan="off",
+        )
+        return uvicorn.Server(cfg).serve()
+
+    supervised_tasks = []
+    supervised_tasks.append(
+        asyncio.create_task(
+            _supervise("uvicorn", _make_uvicorn_coro),
+            name="supervise-uvicorn",
+        )
+    )
+    log.info("API server running on :8000 (supervised)")
+
+    # --- Slack listener ---
+    # Slack is already started inside cli.initialize() via asyncio.create_task().
+    # We replace that fire-and-forget task with a supervised one.
     from core.slack_listener import slack_listener
     if slack_listener.is_configured():
-        slack_listener.set_handler(cli.handle_chat_message_for_slack)
-        asyncio.create_task(slack_listener.start())
-        log.info("Slack two-way listener started.")
+        # Stop the un-supervised task that cli.initialize() launched, then
+        # re-launch under supervision. slack_listener.start() is idempotent —
+        # it checks self._running and returns quickly if already connected.
+        slack_listener.stop()
+        await asyncio.sleep(0.5)   # let the old task notice _running=False
+
+        supervised_tasks.append(
+            asyncio.create_task(
+                _supervise("slack-listener", slack_listener.start),
+                name="supervise-slack",
+            )
+        )
+        log.info("Slack two-way listener running (supervised)")
     else:
         log.info("Slack listener inactive — SLACK_APP_TOKEN not set.")
+
+    # --- Autonomous Research (ResearchOS bridge) ---
+    from autonomous_research import autonomous_researcher
+    supervised_tasks.append(
+        asyncio.create_task(
+            _supervise("autonomous-research", autonomous_researcher.start),
+            name="supervise-autonomous-research",
+        )
+    )
+    log.info("Autonomous Research module running (supervised)")
 
     # Run forever — SIGTERM/SIGINT trigger graceful shutdown
     loop = asyncio.get_running_loop()
@@ -74,6 +171,12 @@ async def main() -> None:
     await stop
 
     log.info("JARVIS daemon shutting down…")
+
+    # Cancel supervised tasks so they don't restart during shutdown
+    for t in supervised_tasks:
+        t.cancel()
+    await asyncio.gather(*supervised_tasks, return_exceptions=True)
+
     slack_listener.stop()
     await cli.cleanup()
     log.info("JARVIS daemon stopped.")

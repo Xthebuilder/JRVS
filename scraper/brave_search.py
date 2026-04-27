@@ -101,7 +101,7 @@ class BraveSearchClient:
             "text_decorations": "false",
         }
 
-        @retry_on_failure(max_retries=2, delay=1.0, backoff=2.0)
+        @retry_on_failure(max_retries=1, delay=0.5, backoff=1.5)
         async def _do_request() -> dict | None:
             session = await self._get_session()
             async with session.get(BRAVE_SEARCH_URL, params=params) as resp:

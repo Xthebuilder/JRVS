@@ -264,7 +264,7 @@ def trigger_training():
         )
         deploy_model()
     else:
-        log(f"Training FAILED. Last 50 lines of output:")
+        log("Training FAILED. Last 50 lines of output:")
         for line in result.stdout.splitlines()[-50:]:
             log(f"  {line}")
         log(f"Stderr:\n{result.stderr[-500:]}")
@@ -304,19 +304,35 @@ def show_status():
     pending = get_pending_feedback(str(DATABASE_PATH))
     approved = count_approved()
     print(f"\n{'='*50}")
-    print(f"  FEEDBACK LOOP STATUS")
+    print("  FEEDBACK LOOP STATUS")
     print(f"{'='*50}")
     print(f"  Pending feedback    : {len(pending)}")
     print(f"  Approved examples   : {approved}")
     print(f"  Training threshold  : {TRAIN_THRESHOLD}")
     print(f"  Ready to train      : {'YES' if approved >= TRAIN_THRESHOLD else f'NO — need {TRAIN_THRESHOLD - approved} more'}")
     if pending:
-        print(f"\n  Recent feedback:")
+        print("\n  Recent feedback:")
         for item in pending[-3:]:
             print(f"    - {item['question'][:70]}")
     print(f"{'='*50}\n")
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
+
+_SENTINEL_FILE = Path("./data/retrain_queued")
+
+
+def _consume_sentinel() -> bool:
+    """Return True and delete the sentinel if it exists (auto-queue triggered)."""
+    if _SENTINEL_FILE.exists():
+        try:
+            content = _SENTINEL_FILE.read_text().strip()
+            log(f"Sentinel found: {content}")
+            _SENTINEL_FILE.unlink()
+            return True
+        except Exception as exc:
+            log(f"Could not read/delete sentinel: {exc}")
+    return False
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -324,6 +340,11 @@ def main():
     parser.add_argument("--status",  action="store_true", help="Show queue stats and exit")
     parser.add_argument("--force-train", action="store_true", help="Train even if below threshold")
     args = parser.parse_args()
+
+    # Auto-trigger: if a sentinel was written by the self-improvement check, treat as --force-train
+    if not args.force_train and _consume_sentinel():
+        log("Auto-trigger: sentinel found — forcing training run")
+        args.force_train = True
 
     if args.status:
         show_status()
@@ -373,7 +394,7 @@ def main():
             log(f"  Generated. Preview: {example['answer'][-200:].strip()[:120]}")
             generated += 1
         else:
-            log(f"  Failed to generate.")
+            log("  Failed to generate.")
             failed += 1
 
     log(f"\nProcessed: {generated} generated, {failed} failed")
@@ -389,7 +410,7 @@ def main():
     else:
         remaining = TRAIN_THRESHOLD - count_approved()
         log(f"\nNot training yet — need {remaining} more approved examples.")
-        log(f"Keep using JRVS and flagging bad responses with 'that was wrong'.")
+        log("Keep using JRVS and flagging bad responses with 'that was wrong'.")
 
     log(f"\nDone. Log saved to {log_file}")
 

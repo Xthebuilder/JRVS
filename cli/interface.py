@@ -43,6 +43,10 @@ class JarvisCLI:
         # Sensory background modules
         self._vision: Optional[VisionModule] = None
         self._ambient_audio: Optional[AmbientListener] = None
+        # Unified agent loop and event triggers (set during initialize())
+        self._agent_loop = None
+        self._llm_router = None
+        self._trigger_hub = None
 
     async def initialize(self):
         """Initialize all components"""
@@ -85,6 +89,26 @@ class JarvisCLI:
             cron_scheduler.set_notify(lambda msg: theme.print_info(msg))
             await cron_scheduler.start()
 
+            # ── Unified agent loop ──────────────────────────────────────────
+            # Register all built-in tools (runs @jarvis_tool decorators)
+            import agent.tools  # noqa: F401
+
+            from agent.loop import init_agent_loop
+            from core.slack_notifier import send_approval_request_async
+            from llm.router import LLMRouter
+
+            _router = LLMRouter(local=self.llm_client)
+
+            async def _slack_approval(action_id, tool, args, reason, goal_id):
+                return await send_approval_request_async(
+                    action_id=action_id, tool=tool, args=args,
+                    reason=reason, goal_id=goal_id,
+                )
+
+            self._agent_loop = init_agent_loop(db=db, slack_send_approval=_slack_approval)
+            self._llm_router = _router
+            theme.print_success("Unified agent loop initialised")
+
             # ── Slack two-way listener ──────────────────────────────────────
             from core.slack_listener import slack_listener
             if slack_listener.is_configured():
@@ -93,6 +117,18 @@ class JarvisCLI:
                 theme.print_success("Slack two-way messaging active (Socket Mode)")
             else:
                 theme.print_info("Slack listener inactive — add SLACK_APP_TOKEN to .env to enable")
+
+            # ── Event trigger hub ───────────────────────────────────────────
+            from agent.triggers import TriggerHub
+            self._trigger_hub = TriggerHub(
+                db=db,
+                agent_loop=self._agent_loop,
+                llm_backend=_router,
+            )
+            if slack_listener.is_configured():
+                self._trigger_hub.register_slack_goal_trigger(slack_listener)
+            await self._trigger_hub.start()
+            theme.print_success("Event trigger hub started (Gmail, Calendar, File, Slack)")
 
             # Catch-up: embed any conversation turns that were missed by a previous crash
             asyncio.create_task(rag_retriever.embed_pending_conversations())
@@ -493,6 +529,21 @@ class JarvisCLI:
                 await vibe_checker.vibe_check(message)
             except SecurityException as sec_exc:
                 return f"Message blocked — potential injection detected (similarity={sec_exc.similarity:.3f})."
+
+            # ── Goal intent detection ─────────────────────────────────────
+            # Check if this message is asking to run a goal before falling
+            # through to the normal LLM chat path.
+            goal_id = _detect_goal_intent(message)
+            if goal_id:
+                return await self._run_goal_for_slack(goal_id, message)
+
+            # ── Ad-hoc task routing ───────────────────────────────────────
+            # If the message looks like a multi-step action request, send it
+            # directly to AgentLoop rather than the chat path.
+            if _is_adhoc_task(message):
+                import uuid
+                adhoc_id = f"adhoc_{uuid.uuid4().hex[:8]}"
+                return await self._run_goal_for_slack(adhoc_id, message)
 
             # Intent router — same routing as normal chat
             from cli.intent_router import detect_command_intent
@@ -1604,6 +1655,57 @@ class JarvisCLI:
             )
         theme.print_info("Run a goal with: /agent run <id>")
 
+    async def _run_goal_for_slack(self, goal_id: str, original_message: str) -> str:
+        """Run a goal via AgentLoop and return a Slack-friendly result string."""
+        from agent.loop import get_agent_loop
+        from llm.router import LLMRouter
+
+        agent_loop = get_agent_loop()
+        if agent_loop is None:
+            return "AgentLoop not ready — try again in a moment."
+
+        # Load goal text from goals.yaml
+        import yaml
+        from pathlib import Path
+        goals_file = Path(__file__).parent.parent / "goals.yaml"
+        goal_text = original_message  # fallback: use the raw message as the goal
+        if goals_file.exists():
+            try:
+                data = yaml.safe_load(goals_file.read_text()) or {}
+                for g in data.get("goals", []):
+                    if g.get("id") == goal_id:
+                        goal_text = g.get("goal", original_message)
+                        goal_text = goal_text.replace(
+                            "{date}", __import__("datetime").datetime.now().strftime("%Y-%m-%d")
+                        )
+                        break
+            except Exception:
+                pass
+
+        backend = self._llm_router or LLMRouter(local=self.llm_client)
+
+        try:
+            result = await agent_loop.run_goal(
+                goal_id=goal_id,
+                goal_text=goal_text,
+                backend=backend,
+            )
+            if result.status == "completed":
+                return (
+                    f":white_check_mark: Goal `{goal_id}` completed "
+                    f"({result.steps_ok} steps). Check Slack for details."
+                )
+            elif result.status == "awaiting_approval":
+                return (
+                    f":bell: Goal `{goal_id}` is waiting for your approval — "
+                    f"check for the Approve/Deny message above."
+                )
+            else:
+                return f":x: Goal `{goal_id}` failed: {result.error[:200]}"
+        except Exception as exc:
+            logger.error("_run_goal_for_slack: %s", exc)
+            return f":x: Error running goal `{goal_id}`: {exc}"
+
     async def agent_run_goal(self, goal_id: str):
         """Run a specific goal immediately."""
         theme.print_status(f"Running goal '{goal_id}'...", "info")
@@ -1840,3 +1942,103 @@ class JarvisCLI:
 
 # CLI instance
 cli = JarvisCLI()
+
+
+# ── Ad-hoc task detection ─────────────────────────────────────────────────────
+
+# Phrases that suggest the user wants JARVIS to *do* something, not just answer
+_ADHOC_ACTION_VERBS = [
+    "research", "find", "search for", "look up", "fetch",
+    "create", "write", "save", "summarise", "summarize",
+    "analyse", "analyze", "compile", "generate", "list",
+]
+_ADHOC_TOOL_HINTS = [
+    "and save", "to a file", "to file", "save to", "write to",
+    "and write", "and create", "and send", "then save",
+    "in a file", "save it", "store it",
+]
+
+def _is_adhoc_task(message: str) -> bool:
+    """
+    Return True if the message looks like a multi-step action request
+    that should go to AgentLoop rather than the plain chat path.
+    Must have both an action verb near the start AND a tool hint anywhere.
+    """
+    text = message.lower().strip()
+    # Must start with (or begin with "please/can you/go") an action verb
+    has_verb = any(
+        text.startswith(v) or text.startswith(f"please {v}")
+        or text.startswith(f"can you {v}") or text.startswith(f"go {v}")
+        for v in _ADHOC_ACTION_VERBS
+    )
+    has_hint = any(hint in text for hint in _ADHOC_TOOL_HINTS)
+    return has_verb and has_hint
+
+
+# ── Goal intent detection ─────────────────────────────────────────────────────
+
+def _detect_goal_intent(message: str) -> Optional[str]:
+    """
+    Detect if a Slack message is asking to run a specific goal.
+    Returns a goal_id string if matched, None otherwise.
+
+    Handles:
+      - Explicit: "run morning_digest", "/agent run morning_digest"
+      - Natural:  "morning digest", "give me my morning digest",
+                  "run the weekly report", "do the daily brief"
+    """
+    import re
+    import yaml
+    from pathlib import Path
+
+    text = message.strip().lower()
+
+    # Load goal IDs and their keywords from goals.yaml
+    goals_file = Path(__file__).parent.parent / "goals.yaml"
+    goals = []
+    if goals_file.exists():
+        try:
+            data = yaml.safe_load(goals_file.read_text()) or {}
+            goals = [g for g in data.get("goals", []) if g.get("enabled", True)]
+        except Exception:
+            pass
+
+    # 1. Explicit: "run <goal_id>" or "/agent run <goal_id>"
+    m = re.search(r"(?:^|\s)(?:/agent\s+run|run)\s+([a-z0-9_]+)", text)
+    if m:
+        candidate = m.group(1)
+        for g in goals:
+            if g.get("id") == candidate:
+                return candidate
+
+    # 2. Natural language match — check if the message contains enough words
+    #    from the goal's ID or its name keywords
+    _GOAL_ALIASES: dict[str, list[str]] = {
+        "morning_digest":       ["morning digest", "morning brief", "morning summary", "overnight emails"],
+        "daily_calendar_brief": ["calendar brief", "today's schedule", "what's on today", "daily brief", "calendar today"],
+        "end_of_day_summary":   ["end of day", "eod summary", "daily summary", "day summary"],
+        "urgent_email_watch":   ["urgent emails", "urgent email", "check urgent", "flagged emails"],
+        "inbox_zero_check":     ["inbox", "unread emails", "inbox check", "check inbox"],
+        "draft_reply_urgent":   ["draft reply", "draft response", "draft an email"],
+        "weekly_youtube_report":["youtube report", "youtube analytics", "channel report", "weekly youtube"],
+        "weekly_trend_research":["trend research", "trending topics", "research trends", "weekly trends"],
+        "research_brief":       ["research brief", "ai tools brief", "research update"],
+    }
+
+    # Add any goal IDs not in the hardcoded map (using ID words as keywords)
+    goal_ids_in_yaml = {g["id"] for g in goals}
+    for g in goals:
+        gid = g["id"]
+        if gid not in _GOAL_ALIASES:
+            # Convert snake_case to space-separated words as a fallback alias
+            _GOAL_ALIASES[gid] = [gid.replace("_", " ")]
+
+    for goal_id, aliases in _GOAL_ALIASES.items():
+        # Only match goals that exist and are enabled in goals.yaml
+        if goal_ids_in_yaml and goal_id not in goal_ids_in_yaml:
+            continue
+        for alias in aliases:
+            if alias in text:
+                return goal_id
+
+    return None
