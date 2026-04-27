@@ -67,6 +67,8 @@ Every write action JRVS takes — sending an email, creating a Doc, updating a S
 
 > SSO/SAML and multi-user team management are on the roadmap. [See ENTERPRISE.md](./ENTERPRISE.md) for details.
 
+[Full pricing details and FAQ →](./PRICING.md)
+
 Community use is free under [CC BY-NC 4.0](LICENSE). Commercial use requires a Professional or Team license.
 
 ---
