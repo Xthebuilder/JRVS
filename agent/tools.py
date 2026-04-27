@@ -333,3 +333,80 @@ async def calendar_delete(event_id: str, calendar_id: str = "primary") -> dict:
     from jrvs.google.calendar_client import CalendarClient
     client = CalendarClient()
     return await _run_sync(client.delete_event, event_id=event_id, calendar_id=calendar_id)
+
+
+# ── Marketing (NOTIFY generate / AUTO list) ───────────────────────────────────
+
+@jarvis_tool(
+    name="marketing_generate",
+    tier=NOTIFY,
+    desc="Generate a marketing draft for a brand (tensorlink, xthebuilder) and platform (linkedin, twitter, email)",
+)
+async def marketing_generate(
+    brand: str,
+    platform: str,
+    topic: str,
+    content_type: str = "post",
+) -> dict:
+    from marketing_module import marketing_module
+    try:
+        job_id = await marketing_module.queue_draft(
+            brand=brand, platform=platform, topic=topic,
+            content_type=content_type, source="agent",
+        )
+        return {"job_id": job_id, "status": "queued", "brand": brand, "platform": platform}
+    except ValueError as exc:
+        return {"error": str(exc)}
+
+
+@jarvis_tool(
+    name="marketing_list",
+    tier=AUTO,
+    desc="List recent marketing drafts, optionally filtered by brand or platform",
+)
+async def marketing_list(brand: str = "", platform: str = "", limit: int = 10) -> list:
+    from marketing_module import marketing_module
+    return await marketing_module.list_drafts(
+        brand=brand or None, platform=platform or None, limit=limit
+    )
+
+
+# ── Image generation (NOTIFY generate / AUTO list) ────────────────────────────
+
+@jarvis_tool(
+    name="image_gen_generate",
+    tier=NOTIFY,
+    desc=(
+        "Generate an image via local ComfyUI. "
+        "Required: prompt. "
+        "Optional: model (checkpoint filename), steps (1-150, default 20), "
+        "cfg (1.0-30.0, default 7.0), width (default 512), height (default 512)"
+    ),
+)
+async def image_gen_generate(
+    prompt: str,
+    model:  str   = "",
+    steps:  int   = 20,
+    cfg:    float = 7.0,
+    width:  int   = 512,
+    height: int   = 512,
+) -> dict:
+    from image_gen_module import image_gen_module
+    try:
+        job_id = await image_gen_module.queue_job(
+            prompt=prompt, model=model, steps=steps,
+            cfg=cfg, width=width, height=height, source="agent",
+        )
+        return {"job_id": job_id, "status": "queued"}
+    except (ValueError, Exception) as exc:
+        return {"error": str(exc)}
+
+
+@jarvis_tool(
+    name="image_gen_list",
+    tier=AUTO,
+    desc="List recent ComfyUI image generation jobs and their output paths",
+)
+async def image_gen_list(status: str = "", limit: int = 10) -> list:
+    from image_gen_module import image_gen_module
+    return await image_gen_module.list_jobs(status=status or None, limit=limit)

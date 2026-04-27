@@ -31,6 +31,45 @@ def _rest_after(pattern: str, text: str) -> str:
     return text[m.end():].strip() if m else text.strip()
 
 
+def _build_imagegen_intent(msg: str) -> str:
+    """Extract image generation prompt from a natural-language request."""
+    # Strip the trigger verb phrase and return the remainder as the prompt
+    for pattern in (
+        r"\b(generate|create|make|draw|render|paint)\b.{0,15}\b(an?\s+)?(image|picture|photo|illustration|artwork|drawing)\s+(of\s+)?",
+        r"\b(imagine|visualize)\b.{0,10}\b(me\s+)?(a\s+)?",
+    ):
+        m = re.search(pattern, msg, re.IGNORECASE)
+        if m:
+            prompt = msg[m.end():].strip().rstrip(".,!?")
+            if prompt:
+                return f"/imagegen generate {prompt}"
+    return f"/imagegen generate {msg.strip()}"
+
+
+def _build_marketing_intent(msg: str) -> str:
+    """Extract brand, platform, and topic from a marketing request."""
+    brand_m = re.search(r"\b(tensorlink|xthebuilder)\b", msg, re.IGNORECASE)
+    brand = brand_m.group(0).lower() if brand_m else "xthebuilder"
+    if re.search(r"\btweet\b", msg, re.IGNORECASE):
+        platform = "twitter"
+    else:
+        plat_m = re.search(r"\b(linkedin|twitter|email)\b", msg, re.IGNORECASE)
+        platform = plat_m.group(0).lower() if plat_m else "twitter"
+    # Try topic-introducing keywords in priority order — "about" before "for"
+    # so "write a post for TensorLink about X" correctly extracts X, not "TensorLink about X"
+    topic = None
+    for kw in (r"\babout\b", r"\bannouncing\b", r"\bregarding\b"):
+        m_kw = re.search(kw, msg, re.IGNORECASE)
+        if m_kw:
+            candidate = msg[m_kw.end():].strip()
+            if candidate:
+                topic = candidate
+                break
+    if not topic:
+        topic = msg.strip()
+    return f"/marketing queue {brand} {platform} {topic}"
+
+
 # ---------------------------------------------------------------------------
 # Intent table
 # Each tuple: (regex, builder)
@@ -251,6 +290,35 @@ _INTENTS: list[_Route] = [
             re.IGNORECASE,
         ),
         lambda m, msg: "/brave-status",
+    ),
+
+    # ── image generation ─────────────────────────────────────────────────────
+    # Fires on clear image-gen requests. Placed before marketing so that
+    # "generate an image of the tensorlink logo" goes here, not marketing.
+    # Does NOT fire on "generate python code" — code-generate pattern is earlier.
+    (
+        re.compile(
+            r"\b(generate|create|make|draw|render|paint)\b.{0,15}"
+            r"\b(an?\s+)?(image|picture|photo|illustration|artwork|drawing)\b"
+            r"|\b(imagine|visualize)\b.{0,20}\b(of|showing|with|a\b)",
+            re.IGNORECASE,
+        ),
+        lambda m, msg: _build_imagegen_intent(msg),
+    ),
+
+    # ── marketing draft ──────────────────────────────────────────────────────
+    # Only fires when both a known brand and a known platform are mentioned.
+    (
+        re.compile(
+            r"\b(write|generate|draft|create)\b.{0,20}"
+            r"\b(linkedin\s+post|tweet|twitter\s+post|email)\b"
+            r".{0,40}\b(tensorlink|xthebuilder)\b"
+            r"|\b(tensorlink|xthebuilder)\b.{0,30}"
+            r"\b(linkedin|twitter|tweet|email)\b.{0,20}"
+            r"\b(post|copy|draft|content|campaign)\b",
+            re.IGNORECASE,
+        ),
+        lambda m, msg: _build_marketing_intent(msg),
     ),
 
 ]

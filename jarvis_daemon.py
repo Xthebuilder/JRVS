@@ -161,6 +161,26 @@ async def main() -> None:
     )
     log.info("Autonomous Research module running (supervised)")
 
+    # --- Marketing Module ---
+    from marketing_module import marketing_module
+    supervised_tasks.append(
+        asyncio.create_task(
+            _supervise("marketing", marketing_module.start),
+            name="supervise-marketing",
+        )
+    )
+    log.info("Marketing module running (supervised)")
+
+    # --- Image Generation Module (ComfyUI) ---
+    from image_gen_module import image_gen_module
+    supervised_tasks.append(
+        asyncio.create_task(
+            _supervise("image-gen", image_gen_module.start),
+            name="supervise-image-gen",
+        )
+    )
+    log.info("Image generation module running (supervised, ComfyUI at %s)", "http://127.0.0.1:8188")
+
     # Run forever — SIGTERM/SIGINT trigger graceful shutdown
     loop = asyncio.get_running_loop()
     stop = loop.create_future()

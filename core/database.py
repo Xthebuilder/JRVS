@@ -219,6 +219,48 @@ class Database:
         await db.execute("CREATE INDEX IF NOT EXISTS idx_goal_state_status ON goal_state(status)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_pending_approvals_status ON pending_approvals(status)")
 
+        # Marketing drafts — LLM-generated copy queue
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS marketing_drafts (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id       TEXT    UNIQUE NOT NULL,
+                brand        TEXT    NOT NULL,
+                platform     TEXT    NOT NULL,
+                topic        TEXT    NOT NULL,
+                content_type TEXT    NOT NULL DEFAULT 'post',
+                content      TEXT    NOT NULL,
+                char_count   INTEGER NOT NULL DEFAULT 0,
+                status       TEXT    NOT NULL DEFAULT 'draft',
+                source       TEXT    NOT NULL DEFAULT 'manual',
+                created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_marketing_brand ON marketing_drafts(brand)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_marketing_platform ON marketing_drafts(platform)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_marketing_status ON marketing_drafts(status)")
+
+        # Image generation jobs — ComfyUI queue
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS image_gen_jobs (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id      TEXT    UNIQUE NOT NULL,
+                prompt      TEXT    NOT NULL,
+                model       TEXT    NOT NULL DEFAULT '',
+                steps       INTEGER NOT NULL DEFAULT 20,
+                cfg         REAL    NOT NULL DEFAULT 7.0,
+                width       INTEGER NOT NULL DEFAULT 512,
+                height      INTEGER NOT NULL DEFAULT 512,
+                seed_used   INTEGER NOT NULL DEFAULT -1,
+                output_path TEXT    NOT NULL DEFAULT '',
+                status      TEXT    NOT NULL DEFAULT 'queued',
+                error       TEXT    NOT NULL DEFAULT '',
+                source      TEXT    NOT NULL DEFAULT 'manual',
+                created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_image_gen_status ON image_gen_jobs(status)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_image_gen_created ON image_gen_jobs(created_at)")
+
     # ------------------------------------------------------------------
     # Migration system
     # ------------------------------------------------------------------
@@ -236,6 +278,8 @@ class Database:
             ("m003_drop_chunks_embedding_vector", self._m003_drop_chunks_embedding_vector),
             ("m004_add_documents_mem0_synced", self._m004_add_documents_mem0_synced),
             ("m005_add_goal_state_tables", self._m005_add_goal_state_tables),
+            ("m006_add_marketing_drafts", self._m006_add_marketing_drafts),
+            ("m007_add_image_gen_jobs",   self._m007_add_image_gen_jobs),
         ]
 
         for name, fn in migrations:
@@ -293,7 +337,67 @@ class Database:
                 "ALTER TABLE documents ADD COLUMN mem0_synced INTEGER DEFAULT 0"
             )
 
-    async def add_conversation(self, session_id: str, user_message: str, 
+    @staticmethod
+    async def _m006_add_marketing_drafts(db) -> None:
+        """Add marketing_drafts table for the marketing module."""
+        cur = await db.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='marketing_drafts'"
+        )
+        if await cur.fetchone() is not None:
+            return
+        await db.execute("""
+            CREATE TABLE marketing_drafts (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id       TEXT    UNIQUE NOT NULL,
+                brand        TEXT    NOT NULL,
+                platform     TEXT    NOT NULL,
+                topic        TEXT    NOT NULL,
+                content_type TEXT    NOT NULL DEFAULT 'post',
+                content      TEXT    NOT NULL,
+                char_count   INTEGER NOT NULL DEFAULT 0,
+                status       TEXT    NOT NULL DEFAULT 'draft',
+                source       TEXT    NOT NULL DEFAULT 'manual',
+                created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_marketing_brand ON marketing_drafts(brand)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_marketing_platform ON marketing_drafts(platform)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_marketing_status ON marketing_drafts(status)")
+
+    @staticmethod
+    async def _m007_add_image_gen_jobs(db) -> None:
+        """Add image_gen_jobs table for the ComfyUI image generation module."""
+        cur = await db.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='image_gen_jobs'"
+        )
+        if await cur.fetchone() is not None:
+            return
+        await db.execute("""
+            CREATE TABLE image_gen_jobs (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id      TEXT    UNIQUE NOT NULL,
+                prompt      TEXT    NOT NULL,
+                model       TEXT    NOT NULL DEFAULT '',
+                steps       INTEGER NOT NULL DEFAULT 20,
+                cfg         REAL    NOT NULL DEFAULT 7.0,
+                width       INTEGER NOT NULL DEFAULT 512,
+                height      INTEGER NOT NULL DEFAULT 512,
+                seed_used   INTEGER NOT NULL DEFAULT -1,
+                output_path TEXT    NOT NULL DEFAULT '',
+                status      TEXT    NOT NULL DEFAULT 'queued',
+                error       TEXT    NOT NULL DEFAULT '',
+                source      TEXT    NOT NULL DEFAULT 'manual',
+                created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_image_gen_status ON image_gen_jobs(status)"
+        )
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_image_gen_created ON image_gen_jobs(created_at)"
+        )
+
+    async def add_conversation(self, session_id: str, user_message: str,
                              ai_response: str, model_used: str, 
                              context_used: Optional[str] = None) -> int:
         """Add a conversation record"""
@@ -794,6 +898,113 @@ class Database:
             """, (days,))
             
             await db.commit()
+
+    # ------------------------------------------------------------------
+    # Marketing drafts
+    # ------------------------------------------------------------------
+
+    async def save_marketing_draft(
+        self,
+        job_id: str,
+        brand: str,
+        platform: str,
+        topic: str,
+        content_type: str,
+        content: str,
+        source: str = "manual",
+    ) -> int:
+        """Insert or replace a marketing draft. Returns the row id."""
+        async with _open_db(self.db_path) as db:
+            cursor = await db.execute(
+                """
+                INSERT OR REPLACE INTO marketing_drafts
+                    (job_id, brand, platform, topic, content_type, content, char_count, source)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (job_id, brand, platform, topic, content_type, content, len(content), source),
+            )
+            await db.commit()
+            return cursor.lastrowid
+
+    async def list_marketing_drafts(
+        self,
+        brand: Optional[str] = None,
+        platform: Optional[str] = None,
+        limit: int = 10,
+    ) -> List[Dict]:
+        """Return recent marketing drafts, newest first, optionally filtered."""
+        clauses: List[str] = []
+        params: List = []
+        if brand:
+            clauses.append("brand = ?")
+            params.append(brand)
+        if platform:
+            clauses.append("platform = ?")
+            params.append(platform)
+        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+        params.append(limit)
+        async with _open_db(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                f"SELECT * FROM marketing_drafts {where} ORDER BY created_at DESC LIMIT ?",
+                params,
+            )
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # Image generation jobs
+    # ------------------------------------------------------------------
+
+    async def upsert_image_job(self, job_id: str, fields: dict) -> None:
+        """Insert or partially update an image_gen_jobs row.
+
+        On insert, job_id is added to fields automatically.
+        On update, only the supplied keys are changed — other columns untouched.
+        """
+        async with _open_db(self.db_path) as db:
+            cur = await db.execute(
+                "SELECT job_id FROM image_gen_jobs WHERE job_id = ?", (job_id,)
+            )
+            existing = await cur.fetchone()
+            if existing:
+                set_clause = ", ".join(f"{k} = ?" for k in fields)
+                await db.execute(
+                    f"UPDATE image_gen_jobs SET {set_clause} WHERE job_id = ?",
+                    [*fields.values(), job_id],
+                )
+            else:
+                fields = {"job_id": job_id, **fields}
+                cols   = ", ".join(fields.keys())
+                placeholders = ", ".join("?" for _ in fields)
+                await db.execute(
+                    f"INSERT INTO image_gen_jobs ({cols}) VALUES ({placeholders})",
+                    list(fields.values()),
+                )
+            await db.commit()
+
+    async def list_image_jobs(
+        self,
+        status: Optional[str] = None,
+        limit:  int = 10,
+    ) -> List[Dict]:
+        """Return recent image jobs, newest first, optionally filtered by status."""
+        params: List = []
+        where = ""
+        if status:
+            where = "WHERE status = ?"
+            params.append(status)
+        params.append(limit)
+        async with _open_db(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                f"SELECT * FROM image_gen_jobs {where} "
+                f"ORDER BY created_at DESC LIMIT ?",
+                params,
+            )
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+
 
 # Global database instance
 db = Database()

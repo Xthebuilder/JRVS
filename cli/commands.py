@@ -364,6 +364,136 @@ class CommandHandler:
                     "Call download_music() for each URL now."
                 )
 
+            elif command == "marketing":
+                sub = command_args[0] if command_args else ""
+                if sub == "queue":
+                    # /marketing queue <brand> <platform> <topic...>
+                    if len(command_args) < 4:
+                        theme.print_error("Usage: /marketing queue <brand> <platform> <topic>")
+                        theme.print_info("  Brands:    tensorlink, xthebuilder")
+                        theme.print_info("  Platforms: linkedin, twitter, email")
+                    else:
+                        brand, platform = command_args[1], command_args[2]
+                        topic = " ".join(command_args[3:])
+                        try:
+                            from marketing_module import marketing_module
+                            job_id = await marketing_module.queue_draft(
+                                brand=brand, platform=platform, topic=topic, source="cli"
+                            )
+                            theme.print_success(
+                                f"Queued marketing draft {job_id[:8]} ({brand}/{platform})"
+                            )
+                            theme.print_info(
+                                "Generation in progress — Slack notification when ready."
+                            )
+                        except ValueError as exc:
+                            theme.print_error(str(exc))
+                elif sub == "list":
+                    brand = command_args[1] if len(command_args) > 1 else None
+                    platform = command_args[2] if len(command_args) > 2 else None
+                    try:
+                        from marketing_module import marketing_module
+                        drafts = await marketing_module.list_drafts(
+                            brand=brand, platform=platform, limit=10
+                        )
+                        if not drafts:
+                            theme.print_info("No drafts found.")
+                        else:
+                            for d in drafts:
+                                limit = {"linkedin": 1300, "twitter": 280, "email": 0}.get(
+                                    d["platform"], 0
+                                )
+                                count_note = (
+                                    f"{d['char_count']}/{limit}"
+                                    if limit else str(d["char_count"])
+                                )
+                                theme.print_info(
+                                    f"#{d['id']:>4}  [{d['brand']}/{d['platform']}]"
+                                    f"  {count_note} chars  {d['topic'][:60]}"
+                                )
+                    except Exception as exc:
+                        theme.print_error(f"Error listing drafts: {exc}")
+                else:
+                    theme.print_error("Usage: /marketing <queue|list>")
+                    theme.print_info("  /marketing queue <brand> <platform> <topic>")
+                    theme.print_info("  /marketing list [brand] [platform]")
+
+            elif command == "imagegen":
+                sub = command_args[0] if command_args else ""
+
+                if sub == "generate":
+                    # Parse optional flags before the prompt
+                    # Usage: /imagegen generate [--model X] [--steps N] [--cfg F] [--size WxH] <prompt...>
+                    remaining = command_args[1:]
+                    model, steps, cfg, width, height = "", 20, 7.0, 512, 512
+                    prompt_parts = []
+                    i = 0
+                    while i < len(remaining):
+                        tok = remaining[i]
+                        if tok == "--model" and i + 1 < len(remaining):
+                            model = remaining[i + 1]; i += 2
+                        elif tok == "--steps" and i + 1 < len(remaining):
+                            try: steps = int(remaining[i + 1])
+                            except ValueError: theme.print_error("--steps must be an integer"); return
+                            i += 2
+                        elif tok == "--cfg" and i + 1 < len(remaining):
+                            try: cfg = float(remaining[i + 1])
+                            except ValueError: theme.print_error("--cfg must be a number"); return
+                            i += 2
+                        elif tok == "--size" and i + 1 < len(remaining):
+                            try:
+                                w, h = remaining[i + 1].lower().split("x")
+                                width, height = int(w), int(h)
+                            except (ValueError, AttributeError):
+                                theme.print_error("--size must be WxH, e.g. 768x512"); return
+                            i += 2
+                        else:
+                            prompt_parts.append(tok); i += 1
+
+                    prompt = " ".join(prompt_parts).strip()
+                    if not prompt:
+                        theme.print_error("Usage: /imagegen generate [--model X] [--steps N] [--cfg F] [--size WxH] <prompt>")
+                        return
+                    try:
+                        from image_gen_module import image_gen_module
+                        job_id = await image_gen_module.queue_job(
+                            prompt=prompt, model=model, steps=steps,
+                            cfg=cfg, width=width, height=height, source="cli",
+                        )
+                        theme.print_success(f"Queued image job {job_id[:8]}")
+                        theme.print_info(
+                            f"  Prompt: {prompt[:80]}  |  {width}×{height}  "
+                            f"steps={steps}  cfg={cfg}"
+                            + (f"  model={model}" if model else "")
+                        )
+                        theme.print_info("Generation in progress — Slack notification when done.")
+                    except ValueError as exc:
+                        theme.print_error(str(exc))
+
+                elif sub == "list":
+                    status_filter = command_args[1] if len(command_args) > 1 else None
+                    try:
+                        from image_gen_module import image_gen_module
+                        jobs = await image_gen_module.list_jobs(status=status_filter, limit=15)
+                        if not jobs:
+                            theme.print_info("No image jobs found.")
+                        else:
+                            for j in jobs:
+                                path_note = j["output_path"] or "(pending)"
+                                err_note  = f"  ERR: {j['error'][:60]}" if j.get("error") else ""
+                                theme.print_info(
+                                    f"#{j['id']:>4}  [{j['status']:<10}]  "
+                                    f"{j['width']}×{j['height']}  "
+                                    f"{j['prompt'][:50]}  →  {path_note}{err_note}"
+                                )
+                    except Exception as exc:
+                        theme.print_error(f"Error listing jobs: {exc}")
+
+                else:
+                    theme.print_error("Usage: /imagegen <generate|list>")
+                    theme.print_info("  /imagegen generate [--model X] [--steps N] [--cfg F] [--size WxH] <prompt>")
+                    theme.print_info("  /imagegen list [queued|generating|done|failed]")
+
             elif command in ["exit", "quit", "bye"]:
                 if theme.confirm("Are you sure you want to exit?"):
                     self.cli.running = False
