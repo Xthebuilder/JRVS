@@ -1435,6 +1435,12 @@ class JarvisCLI:
 
     async def gmail_send(self, to: str, subject: str, body: str):
         """Send an email via Gmail (write-logged to audit)."""
+        from jrvs.license import require_professional, LicenseError
+        try:
+            require_professional("Gmail send")
+        except LicenseError as exc:
+            theme.print_error(str(exc))
+            return
         if not google_workspace.auth.is_authenticated():
             theme.print_error("Not authenticated. Run /google-auth first.")
             return
@@ -1492,6 +1498,12 @@ class JarvisCLI:
 
     async def gdocs_create(self, title: str, content: str):
         """Create a Google Doc (write-logged to audit)."""
+        from jrvs.license import require_professional, LicenseError
+        try:
+            require_professional("Google Docs create")
+        except LicenseError as exc:
+            theme.print_error(str(exc))
+            return
         if not google_workspace.auth.is_authenticated():
             theme.print_error("Not authenticated. Run /google-auth first.")
             return
@@ -1551,6 +1563,12 @@ class JarvisCLI:
 
     async def gsheets_update(self, title_or_id: str, range_: str, value: str):
         """Update a Google Sheet range (write-logged to audit)."""
+        from jrvs.license import require_professional, LicenseError
+        try:
+            require_professional("Google Sheets update")
+        except LicenseError as exc:
+            theme.print_error(str(exc))
+            return
         if not google_workspace.auth.is_authenticated():
             theme.print_error("Not authenticated. Run /google-auth first.")
             return

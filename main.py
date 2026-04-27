@@ -41,6 +41,10 @@ sys.path.insert(0, str(project_root))
 from core.logging_setup import setup_logging
 setup_logging()
 
+from jrvs.license import load as _load_license, print_banner as _print_license_banner
+_load_license()
+_print_license_banner()
+
 from cli.interface import cli
 from cli.themes import theme
 from core.lazy_loader import health_checker

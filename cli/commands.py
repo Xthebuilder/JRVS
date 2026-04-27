@@ -2,6 +2,7 @@
 import shlex
 from typing import List, Optional
 from .themes import theme
+from jrvs.license import require_professional, LicenseError
 
 class CommandHandler:
     def __init__(self, cli_instance):
@@ -337,6 +338,11 @@ class CommandHandler:
                 elif sub == "status":
                     self.cli.agent_scheduler_status()
                 elif sub == "start":
+                    try:
+                        require_professional("Autonomous agent scheduler")
+                    except LicenseError as exc:
+                        theme.print_error(str(exc))
+                        return
                     await self.cli.agent_start_scheduler()
                 elif sub == "stop":
                     await self.cli.agent_stop_scheduler()
