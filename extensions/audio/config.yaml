@@ -30,7 +30,7 @@ tts:
   piper:
     model: "en_US-ryan-high"
     models_dir: "~/.local/share/piper-voices"
-    binary: "/home/xavier/bin/piper/piper"  # real binary; LD_LIBRARY_PATH set by backend
+    binary: "/path/to/bin/piper"  # real binary; LD_LIBRARY_PATH set by backend
     output_sample_rate: 22050
   kokoro:
     model_path: null     # null = download to ~/.cache/jrvs/kokoro

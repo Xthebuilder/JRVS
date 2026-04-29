@@ -18,7 +18,7 @@ via teacher model → triggers fine-tuning → deploys updated model.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   crontab -e
   # Add this line:
-  0 2 * * * cd /home/xavier/Desktop/JRVS-main && /home/xavier/finetune_env/bin/python feedback_loop.py >> logs/feedback_loop.log 2>&1
+  0 2 * * * cd /path/to/JRVS-main && /path/to/finetune_env/bin/python feedback_loop.py >> logs/feedback_loop.log 2>&1
 """
 
 import asyncio
