@@ -12,12 +12,13 @@ This module provides:
 
 Usage in Pydantic models:
     from core.validators import sanitize_text, MAX_MESSAGE_LEN
-    from pydantic import validator
+    from pydantic import field_validator
 
     class MyRequest(BaseModel):
         message: str = Field(..., max_length=MAX_MESSAGE_LEN)
 
-        @validator("message")
+        @field_validator("message")
+        @classmethod
         def clean(cls, v):
             return sanitize_text(v)
 """

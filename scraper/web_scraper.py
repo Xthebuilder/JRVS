@@ -211,16 +211,35 @@ class WebScraper:
         
         return document_ids
 
-    async def search_and_scrape(self, query: str, search_engine: str = "brave",
+    async def search_and_scrape(self, query: str, search_engine: str = "auto",
                                max_results: int = 5) -> List[int]:
-        """Search web via Brave API and scrape + store results into FAISS"""
-        from scraper.brave_search import brave_search
+        """
+        Search web and scrape + store results into FAISS.
+        
+        search_engine options:
+          - "auto": Use search router with multiple API rotation
+          - "brave": Use Brave Search only (legacy)
+        """
+        if search_engine == "auto":
+            # Use new multi-API router with rotation and failover
+            from scraper.search_router import search_router
+            
+            result = await search_router.search(query)
+            if result.get("error"):
+                log.warning(f"Search failed: {result['error']}")
+                return []
+            
+            results = result.get("results", [])
+        else:
+            # Legacy: Brave Search only
+            from scraper.brave_search import brave_search
 
-        if not brave_search.is_configured:
-            log.warning("Brave Search API key not set — use /brave-key to configure it")
-            return []
+            if not brave_search.is_configured:
+                log.warning("Brave Search API key not set — use /brave-key to configure it")
+                return []
 
-        results = await brave_search.search(query)
+            results = await brave_search.search(query)
+        
         if not results:
             return []
 

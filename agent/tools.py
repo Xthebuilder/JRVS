@@ -410,3 +410,29 @@ async def image_gen_generate(
 async def image_gen_list(status: str = "", limit: int = 10) -> list:
     from image_gen_module import image_gen_module
     return await image_gen_module.list_jobs(status=status or None, limit=limit)
+
+
+# ── Autonomous Research (NOTIFY trigger) ──────────────────────────────────────
+
+@jarvis_tool(
+    name="reddit_research",
+    tier=NOTIFY,
+    desc="Trigger an in-depth, long-running research task on a topic using the Reddit Research OS.",
+)
+async def reddit_research(topic: str, subreddits: str = "", reason: str = "") -> dict:
+    from autonomous_research import autonomous_researcher
+    sub_list = [s.strip() for s in subreddits.split(",") if s.strip()] if subreddits else []
+    try:
+        job_id = await autonomous_researcher.queue_topic(
+            topic=topic,
+            reason=reason or "Triggered manually via agent tool.",
+            subreddits=sub_list,
+            source="agent_tool"
+        )
+        return {
+            "job_id": job_id, 
+            "status": "queued",
+            "message": f"Autonomous research on '{topic}' has been queued and will notify via Slack upon completion."
+        }
+    except Exception as exc:
+        return {"error": str(exc)}

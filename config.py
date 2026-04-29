@@ -122,7 +122,8 @@ except ValueError as _e:
         f"Invalid JRVS config: JRVS_SERVER_PORT='{_jrvs_port_raw}' is not a valid integer."
     ) from _e
 
-# Brave Search API settings
+# ── Web Search APIs (Multi-provider with rotation) ───────────────────────────
+# Brave Search: https://search.brave.com/
 BRAVE_API_KEY = os.environ.get("BRAVE_API_KEY", "")
 _brave_max_raw = os.environ.get("BRAVE_MAX_REQUESTS_PER_SESSION", "20")
 _brave_results_raw = os.environ.get("BRAVE_SEARCH_RESULTS_PER_QUERY", "5")
@@ -135,6 +136,50 @@ except ValueError as _e:
         "BRAVE_MAX_REQUESTS_PER_SESSION and BRAVE_SEARCH_RESULTS_PER_QUERY must be integers."
     ) from _e
 BRAVE_AUTO_SCRAPE = os.environ.get("BRAVE_AUTO_SCRAPE", "true").lower() == "true"
+
+# Exa.ai: https://exa.ai/
+EXA_API_KEY = os.environ.get("EXA_API_KEY", "")
+_exa_results_raw = os.environ.get("EXA_SEARCH_RESULTS_PER_QUERY", "5")
+try:
+    EXA_SEARCH_RESULTS_PER_QUERY = int(_exa_results_raw)
+except ValueError as _e:
+    raise ValueError(f"Invalid JRVS config: EXA_SEARCH_RESULTS_PER_QUERY must be integer: {_e}") from _e
+
+# Tavily: https://app.tavily.com/home
+TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "")
+_tavily_results_raw = os.environ.get("TAVILY_SEARCH_RESULTS_PER_QUERY", "5")
+try:
+    TAVILY_SEARCH_RESULTS_PER_QUERY = int(_tavily_results_raw)
+except ValueError as _e:
+    raise ValueError(f"Invalid JRVS config: TAVILY_SEARCH_RESULTS_PER_QUERY must be integer: {_e}") from _e
+
+# Serper: https://serper.dev/dashboard
+SERPER_API_KEY = os.environ.get("SERPER_API_KEY", "")
+_serper_results_raw = os.environ.get("SERPER_SEARCH_RESULTS_PER_QUERY", "5")
+try:
+    SERPER_SEARCH_RESULTS_PER_QUERY = int(_serper_results_raw)
+except ValueError as _e:
+    raise ValueError(f"Invalid JRVS config: SERPER_SEARCH_RESULTS_PER_QUERY must be integer: {_e}") from _e
+
+# SerpAPI: https://serpapi.com/dashboard
+SERPAPI_API_KEY = os.environ.get("SERPAPI_API_KEY", "")
+_serpapi_results_raw = os.environ.get("SERPAPI_SEARCH_RESULTS_PER_QUERY", "5")
+try:
+    SERPAPI_SEARCH_RESULTS_PER_QUERY = int(_serpapi_results_raw)
+except ValueError as _e:
+    raise ValueError(f"Invalid JRVS config: SERPAPI_SEARCH_RESULTS_PER_QUERY must be integer: {_e}") from _e
+
+# Multi-API Search Router Settings
+SEARCH_API_ROTATION_STRATEGY = os.environ.get("SEARCH_API_ROTATION_STRATEGY", "round-robin")
+SEARCH_API_FAILOVER_ENABLED = os.environ.get("SEARCH_API_FAILOVER_ENABLED", "true").lower() == "true"
+SEARCH_AUTO_SCRAPE = os.environ.get("SEARCH_AUTO_SCRAPE", "true").lower() == "true"
+
+# The Guardian Open Platform
+GUARDIAN_API_KEY = os.environ.get("GUARDIAN_API_KEY", "")
+GUARDIAN_API_BASE_URL = os.environ.get("GUARDIAN_API_BASE_URL", "https://content.guardianapis.com")
+
+# Server URL for public links (reports, etc.)
+SERVER_URL = os.environ.get("SERVER_URL", "http://localhost:8000")
 
 # Google Workspace settings
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")

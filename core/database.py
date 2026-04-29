@@ -4,7 +4,7 @@ import logging
 import re
 import time
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 import asyncio
@@ -261,6 +261,29 @@ class Database:
         await db.execute("CREATE INDEX IF NOT EXISTS idx_image_gen_status ON image_gen_jobs(status)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_image_gen_created ON image_gen_jobs(created_at)")
 
+        # Guardian articles cache for news intelligence workflows
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS guardian_articles (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                guardian_id   TEXT    UNIQUE NOT NULL,
+                type          TEXT    NOT NULL DEFAULT '',
+                section_id    TEXT    NOT NULL DEFAULT '',
+                section_name  TEXT    NOT NULL DEFAULT '',
+                web_title     TEXT    NOT NULL,
+                web_url       TEXT    NOT NULL,
+                api_url       TEXT    NOT NULL DEFAULT '',
+                published_at  TEXT    NOT NULL DEFAULT '',
+                headline      TEXT    NOT NULL DEFAULT '',
+                trail_text    TEXT    NOT NULL DEFAULT '',
+                body_text     TEXT    NOT NULL DEFAULT '',
+                created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_seen_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_guardian_section ON guardian_articles(section_name)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_guardian_published ON guardian_articles(published_at)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_guardian_seen ON guardian_articles(last_seen_at)")
+
     # ------------------------------------------------------------------
     # Migration system
     # ------------------------------------------------------------------
@@ -280,6 +303,7 @@ class Database:
             ("m005_add_goal_state_tables", self._m005_add_goal_state_tables),
             ("m006_add_marketing_drafts", self._m006_add_marketing_drafts),
             ("m007_add_image_gen_jobs",   self._m007_add_image_gen_jobs),
+            ("m008_add_guardian_articles", self._m008_add_guardian_articles),
         ]
 
         for name, fn in migrations:
@@ -396,6 +420,36 @@ class Database:
         await db.execute(
             "CREATE INDEX IF NOT EXISTS idx_image_gen_created ON image_gen_jobs(created_at)"
         )
+
+    @staticmethod
+    async def _m008_add_guardian_articles(db) -> None:
+        """Add guardian_articles table for The Guardian API ingestion."""
+        cur = await db.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='guardian_articles'"
+        )
+        if await cur.fetchone() is not None:
+            return
+        await db.execute("""
+            CREATE TABLE guardian_articles (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                guardian_id   TEXT    UNIQUE NOT NULL,
+                type          TEXT    NOT NULL DEFAULT '',
+                section_id    TEXT    NOT NULL DEFAULT '',
+                section_name  TEXT    NOT NULL DEFAULT '',
+                web_title     TEXT    NOT NULL,
+                web_url       TEXT    NOT NULL,
+                api_url       TEXT    NOT NULL DEFAULT '',
+                published_at  TEXT    NOT NULL DEFAULT '',
+                headline      TEXT    NOT NULL DEFAULT '',
+                trail_text    TEXT    NOT NULL DEFAULT '',
+                body_text     TEXT    NOT NULL DEFAULT '',
+                created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_seen_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_guardian_section ON guardian_articles(section_name)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_guardian_published ON guardian_articles(published_at)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_guardian_seen ON guardian_articles(last_seen_at)")
 
     async def add_conversation(self, session_id: str, user_message: str,
                              ai_response: str, model_used: str, 
@@ -806,7 +860,7 @@ class Database:
 
     async def upsert_goal_state(self, goal_id: str, fields: dict) -> None:
         """Insert or partially update a goal_state row."""
-        fields["updated_at"] = datetime.utcnow().isoformat()
+        fields["updated_at"] = datetime.now(timezone.utc).isoformat()
         async with _open_db(self.db_path) as db:
             cur = await db.execute("SELECT goal_id FROM goal_state WHERE goal_id = ?", (goal_id,))
             existing = await cur.fetchone()
@@ -1000,6 +1054,146 @@ class Database:
             cursor = await db.execute(
                 f"SELECT * FROM image_gen_jobs {where} "
                 f"ORDER BY created_at DESC LIMIT ?",
+                params,
+            )
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # Guardian articles
+    # ------------------------------------------------------------------
+
+    async def upsert_guardian_article(self, article: Dict) -> Tuple[int, bool]:
+        """Insert or update a Guardian article by guardian_id.
+
+        Returns: (row_id, created)
+        """
+        async with _open_db(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cur = await db.execute(
+                "SELECT id FROM guardian_articles WHERE guardian_id = ?",
+                (article["guardian_id"],),
+            )
+            existing = await cur.fetchone()
+            if existing:
+                await db.execute(
+                    """
+                    UPDATE guardian_articles
+                       SET type = ?, section_id = ?, section_name = ?, web_title = ?,
+                           web_url = ?, api_url = ?, published_at = ?, headline = ?,
+                           trail_text = ?, body_text = ?, last_seen_at = CURRENT_TIMESTAMP
+                     WHERE id = ?
+                    """,
+                    (
+                        article.get("type", ""),
+                        article.get("section_id", ""),
+                        article.get("section_name", ""),
+                        article.get("web_title", ""),
+                        article.get("web_url", ""),
+                        article.get("api_url", ""),
+                        article.get("published_at", ""),
+                        article.get("headline", ""),
+                        article.get("trail_text", ""),
+                        article.get("body_text", ""),
+                        existing["id"],
+                    ),
+                )
+                await db.commit()
+                return existing["id"], False
+
+            cursor = await db.execute(
+                """
+                INSERT INTO guardian_articles
+                    (guardian_id, type, section_id, section_name, web_title, web_url,
+                     api_url, published_at, headline, trail_text, body_text)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    article.get("guardian_id", ""),
+                    article.get("type", ""),
+                    article.get("section_id", ""),
+                    article.get("section_name", ""),
+                    article.get("web_title", ""),
+                    article.get("web_url", ""),
+                    article.get("api_url", ""),
+                    article.get("published_at", ""),
+                    article.get("headline", ""),
+                    article.get("trail_text", ""),
+                    article.get("body_text", ""),
+                ),
+            )
+            await db.commit()
+            return cursor.lastrowid, True
+
+    async def touch_guardian_article(self, row_id: int) -> None:
+        """Update last_seen_at for an already-known Guardian article."""
+        async with _open_db(self.db_path) as db:
+            await db.execute(
+                "UPDATE guardian_articles SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (row_id,),
+            )
+            await db.commit()
+
+    async def search_guardian_articles(
+        self,
+        query: str,
+        section: Optional[str] = None,
+        limit: int = 20,
+    ) -> List[Dict]:
+        """Search Guardian article cache by title/headline/trail text."""
+        like = f"%{query}%"
+        clauses = ["(web_title LIKE ? OR headline LIKE ? OR trail_text LIKE ?)"]
+        params: List = [like, like, like]
+        if section:
+            clauses.append("section_name = ?")
+            params.append(section)
+        params.append(limit)
+        where = " AND ".join(clauses)
+
+        async with _open_db(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                f"""
+                SELECT id, guardian_id, section_name, web_title, web_url,
+                       published_at, headline, trail_text, last_seen_at
+                FROM guardian_articles
+                WHERE {where}
+                ORDER BY published_at DESC, last_seen_at DESC
+                LIMIT ?
+                """,
+                params,
+            )
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+
+    async def get_guardian_articles_since(
+        self,
+        days: int,
+        topic: Optional[str] = None,
+        limit: int = 100,
+    ) -> List[Dict]:
+        """Return Guardian articles with publication date in the recent window."""
+        clauses = ["datetime(replace(substr(published_at, 1, 19), 'T', ' ')) >= datetime('now', ?) "]
+        params: List = [f"-{max(1, days)} day"]
+        if topic:
+            like = f"%{topic}%"
+            clauses.append("(web_title LIKE ? OR headline LIKE ? OR trail_text LIKE ? OR body_text LIKE ?)")
+            params.extend([like, like, like, like])
+        params.append(limit)
+        where = " AND ".join(clauses)
+
+        async with _open_db(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                f"""
+                SELECT id, guardian_id, type, section_id, section_name, web_title, web_url,
+                       api_url, published_at, headline, trail_text, body_text,
+                       created_at, last_seen_at
+                FROM guardian_articles
+                WHERE {where}
+                ORDER BY published_at DESC
+                LIMIT ?
+                """,
                 params,
             )
             rows = await cursor.fetchall()

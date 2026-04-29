@@ -25,6 +25,11 @@ done
 echo "Starting JRVS AI Agent..."
 echo ""
 
+# Check if venv exists and activate it
+if [ -d "venv" ]; then
+    source venv/bin/activate
+fi
+
 # Check Ollama
 if ! systemctl is-active --quiet ollama && ! pgrep -f "ollama serve" > /dev/null; then
     echo "Warning: Ollama doesn't appear to be running"

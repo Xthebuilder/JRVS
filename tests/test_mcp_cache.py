@@ -8,7 +8,7 @@ No external dependencies.
 import sys
 import time
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta, timezone
 
 import pytest
 

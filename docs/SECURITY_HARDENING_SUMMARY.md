@@ -136,7 +136,7 @@ All 9 security requirements across Week 1 (Critical) and Week 2 (High Priority) 
   - `ChatRequest` (line 45-53) - validates message length and content
   - `ScrapeRequest` (line 56-70) - validates URLs, blocks internal IPs
   - `CodeExecuteRequest` (line 73-76) - validates code and language
-- ✅ `@validator` decorators for custom validation
+- ✅ `@field_validator` decorators for custom validation
 - ✅ Field constraints (min_length, max_length, pattern)
 
 **Security Benefits**:

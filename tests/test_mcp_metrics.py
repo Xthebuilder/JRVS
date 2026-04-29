@@ -7,7 +7,7 @@ Requires psutil (already in the project venv).
 
 import sys
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone, timezone
 
 import pytest
 
@@ -21,7 +21,7 @@ def _req(tool="search", success=True, duration_ms=100.0, error_type=None):
         tool_name=tool,
         success=success,
         duration_ms=duration_ms,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         error_type=error_type,
     )
 
@@ -171,14 +171,14 @@ class TestSummary:
 
 class TestMetricPoint:
     def test_metric_point_stores_values(self):
-        mp = MetricPoint(timestamp=datetime.utcnow(), value=42.0, labels={"host": "x"})
+        mp = MetricPoint(timestamp=datetime.now(timezone.utc), value=42.0, labels={"host": "x"})
         assert mp.value == 42.0
         assert mp.labels["host"] == "x"
 
 
 class TestRequestMetrics:
     def test_fields_stored(self):
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         rm = RequestMetrics(tool_name="search", success=True, duration_ms=55.5, timestamp=now)
         assert rm.tool_name == "search"
         assert rm.success is True

@@ -7,7 +7,7 @@ resource usage, and system health.
 
 import time
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta, timezone
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field, asdict
 from collections import defaultdict, deque
@@ -55,7 +55,7 @@ class MetricsCollector:
         self.rate_windows = defaultdict(lambda: deque(maxlen=100))  # tool_name -> [timestamps]
 
         # System start time
-        self.start_time = datetime.utcnow()
+        self.start_time = datetime.now(timezone.utc)
 
     def record_request(self, metrics: RequestMetrics):
         """Record a request metric"""
@@ -83,7 +83,7 @@ class MetricsCollector:
             process = psutil.Process()
 
             sample = {
-                "timestamp": datetime.utcnow(),
+                "timestamp": datetime.now(timezone.utc),
                 "cpu_percent": process.cpu_percent(),
                 "memory_mb": process.memory_info().rss / 1024 / 1024,
                 "threads": process.num_threads(),
@@ -160,7 +160,7 @@ class MetricsCollector:
         """Get request rate for a tool"""
         with self._lock:
             timestamps = self.rate_windows.get(tool_name, deque())
-            cutoff = datetime.utcnow() - timedelta(seconds=window_seconds)
+            cutoff = datetime.now(timezone.utc) - timedelta(seconds=window_seconds)
 
             recent = [ts for ts in timestamps if ts > cutoff]
             return len(recent) / window_seconds if recent else 0.0
@@ -188,7 +188,7 @@ class MetricsCollector:
 
     def get_uptime_seconds(self) -> float:
         """Get server uptime in seconds"""
-        return (datetime.utcnow() - self.start_time).total_seconds()
+        return (datetime.now(timezone.utc) - self.start_time).total_seconds()
 
     def get_error_breakdown(self) -> Dict[str, int]:
         """Get breakdown of errors by type"""
@@ -222,7 +222,7 @@ class MetricsCollector:
 
     def _cleanup_old_data(self):
         """Remove old data beyond retention period"""
-        cutoff = datetime.utcnow() - timedelta(seconds=self.retention_seconds)
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=self.retention_seconds)
 
         # Clean request history
         while self.request_history and self.request_history[0].timestamp < cutoff:

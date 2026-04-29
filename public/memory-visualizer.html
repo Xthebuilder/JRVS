@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>JRVS Enterprise Memory Matrix - 3D</title>
+    <style>
+        body { margin: 0; padding: 0; overflow: hidden; background-color: #000000; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; }
+        #3d-graph { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
+        
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; display: flex; flex-direction: column; justify-content: space-between; }
+        
+        #top-bar { display: flex; justify-content: space-between; padding: 20px 30px; background: linear-gradient(to bottom, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0) 100%); pointer-events: auto; }
+        
+        .brand { display: flex; align-items: center; gap: 15px; }
+        .logo-placeholder { width: 40px; height: 40px; border: 2px solid #00e5ff; display: flex; justify-content: center; align-items: center; font-weight: bold; color: #00e5ff; box-shadow: 0 0 10px rgba(0, 229, 255, 0.5); }
+        .title-box h1 { margin: 0; font-size: 1.4rem; letter-spacing: 2px; text-transform: uppercase; color: #fff; font-weight: 400; }
+        .title-box p { margin: 2px 0 0 0; font-size: 0.8rem; color: #00e5ff; text-transform: uppercase; letter-spacing: 1px; }
+
+        .stats { display: flex; gap: 30px; }
+        .stat-box { background: rgba(20, 25, 30, 0.7); border: 1px solid #334; padding: 10px 20px; border-left: 3px solid #00e5ff; backdrop-filter: blur(10px); }
+        .stat-value { font-size: 1.5rem; font-weight: bold; color: #fff; font-family: monospace; }
+        .stat-label { font-size: 0.7rem; color: #88a; text-transform: uppercase; letter-spacing: 1px; }
+
+        #left-panel { position: absolute; top: 100px; left: 30px; width: 250px; background: rgba(10, 12, 15, 0.85); border: 1px solid #223; border-radius: 4px; padding: 20px; pointer-events: auto; backdrop-filter: blur(10px); }
+        
+        .panel-heading { font-size: 0.85rem; color: #557; text-transform: uppercase; letter-spacing: 1.5px; border-bottom: 1px solid #223; padding-bottom: 8px; margin-bottom: 15px; }
+        
+        .search-box { width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.5); border: 1px solid #334; color: #00e5ff; padding: 10px; border-radius: 2px; margin-bottom: 15px; font-family: monospace; outline: none; }
+        .search-box:focus { border-color: #00e5ff; box-shadow: 0 0 5px rgba(0,229,255,0.3); }
+
+        .filter-list { display: flex; flex-direction: column; gap: 10px; }
+        .filter-item { display: flex; align-items: center; cursor: pointer; font-size: 0.9rem; color: #aab; transition: color 0.2s; }
+        .filter-item:hover { color: #fff; }
+        .filter-chk { margin-right: 10px; accent-color: #00e5ff; cursor: pointer; }
+        
+        .node-legend { width: 12px; height: 12px; border-radius: 2px; margin-right: 10px; }
+
+        #detail-panel { position: absolute; top: 100px; right: -450px; width: 380px; height: calc(100vh - 140px); background: rgba(10, 12, 15, 0.95); border: 1px solid #00e5ff; pointer-events: auto; transition: right 0.4s cubic-bezier(0.19, 1, 0.22, 1); display: flex; flex-direction: column; box-shadow: -10px 0 30px rgba(0, 229, 255, 0.1); border-right: none;}
+        #detail-panel.active { right: 0; }
+        
+        .detail-header { padding: 20px; border-bottom: 1px solid #223; position: relative; background: linear-gradient(90deg, rgba(0, 229, 255, 0.1) 0%, transparent 100%); }
+        .close-btn { position: absolute; top: 20px; right: 20px; cursor: pointer; color: #00e5ff; background: none; border: none; font-size: 1.5rem; line-height: 1; }
+        .node-type { font-size: 0.7rem; color: #00e5ff; text-transform: uppercase; letter-spacing: 2px; }
+        .node-title { font-size: 1.3rem; margin: 10px 0 0 0; font-weight: 300; word-wrap: break-word; }
+        
+        .detail-content { padding: 20px; overflow-y: auto; flex-grow: 1; font-family: monospace; font-size: 0.9rem; color: #ccc; line-height: 1.6; white-space: pre-wrap; }
+        .detail-content::-webkit-scrollbar { width: 5px; }
+        .detail-content::-webkit-scrollbar-thumb { background: #00e5ff; }
+        .detail-content::-webkit-scrollbar-track { background: #111; }
+        
+        #error-msg { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); color: #ff3366; background: rgba(20,0,0,0.8); padding: 10px 20px; border-radius: 4px; display: none; z-index: 100; font-family: monospace;}
+    </style>
+    <!-- Simplified Imports to strictly use force-graph natively -->
+    <script src="https://unpkg.com/3d-force-graph"></script>
+</head>
+<body>
+
+<div id="3d-graph"></div>
+
+<div id="ui-layer">
+    <div id="top-bar">
+        <div class="brand">
+            <div class="logo-placeholder">J</div>
+            <div class="title-box">
+                <h1>Enterprise Matrix</h1>
+                <p>Cognitive Knowledge Graph</p>
+            </div>
+        </div>
+        <div class="stats">
+            <div class="stat-box">
+                <div class="stat-value" id="stat-nodes">0</div>
+                <div class="stat-label">Total Memories</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="stat-edges">0</div>
+                <div class="stat-label">Neural Connections</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="left-panel">
+    <div class="panel-heading">Global Query</div>
+    <input type="text" class="search-box" id="search-box" placeholder="Identify patterns...">
+    
+    <div class="panel-heading" style="margin-top: 30px;">Cognitive Layers</div>
+    <div class="filter-list">
+        <label class="filter-item"><input type="checkbox" class="filter-chk" value="conversation" checked> <div class="node-legend" style="background:#00e5ff;"></div> Active Threads</label>
+        <label class="filter-item"><input type="checkbox" class="filter-chk" value="document" checked> <div class="node-legend" style="background:#9933ff;"></div> Core Vectors</label>
+        <label class="filter-item"><input type="checkbox" class="filter-chk" value="chunk" checked> <div class="node-legend" style="background:#ffcc00;"></div> Semantic Fragments</label>
+        <label class="filter-item"><input type="checkbox" class="filter-chk" value="event" checked> <div class="node-legend" style="background:#ff3366;"></div> Temporal Markers</label>
+        <label class="filter-item"><input type="checkbox" class="filter-chk" value="goal" checked> <div class="node-legend" style="background:#33cc33;"></div> Strategic Objectives</label>
+    </div>
+</div>
+
+<div id="detail-panel">
+    <div class="detail-header">
+        <button class="close-btn" id="close-panel">&times;</button>
+        <div class="node-type" id="detail-type">NODE_TYPE</div>
+        <h2 class="node-title" id="detail-title">Node Title</h2>
+    </div>
+    <div class="detail-content" id="detail-text">Select a node in the matrix to inspect its cognitive payload.</div>
+</div>
+
+<div id="error-msg"></div>
+
+<script>
+    let graphData = { nodes: [], links: [] };
+    let Graph = null;
+    let activeFilters = new Set(['conversation', 'document', 'chunk', 'event', 'goal']);
+    let searchQuery = '';
+
+    const colorMap = {
+        'conversation': '#00e5ff',
+        'document': '#9933ff',
+        'chunk': '#ffcc00',
+        'event': '#ff3366',
+        'goal': '#33cc33'
+    };
+
+    const sizeMap = {
+        'conversation': 6,
+        'document': 10,
+        'chunk': 3,
+        'event': 8,
+        'goal': 12
+    };
+
+    function showError(msg) {
+        let el = document.getElementById('error-msg');
+        el.innerText = msg;
+        el.style.display = 'block';
+        console.error(msg);
+    }
+
+    document.getElementById('close-panel').addEventListener('click', () => {
+        document.getElementById('detail-panel').classList.remove('active');
+    });
+
+    document.querySelectorAll('.filter-chk').forEach(cb => {
+        cb.addEventListener('change', (e) => {
+            if(e.target.checked) activeFilters.add(e.target.value);
+            else activeFilters.delete(e.target.value);
+            applyFilters();
+        });
+    });
+
+    document.getElementById('search-box').addEventListener('input', (e) => {
+        searchQuery = e.target.value.toLowerCase();
+        applyFilters();
+    });
+
+    async function initGraph() {
+        try {
+            const res = await fetch('/api/memory-graph');
+            const raw = await res.json();
+            
+            // Map data safely to ensure 3d-force-graph receives clean source/target maps
+            const rawNodes = raw.nodes.map(n => ({...n, val: sizeMap[n.group] || 5, color: colorMap[n.group] || '#ffffff'}));
+            
+            // Security check: ensure all links point to existing nodes
+            const validIds = new Set(rawNodes.map(n => n.id));
+            const rawLinks = raw.edges
+                .filter(e => validIds.has(e.from) && validIds.has(e.to))
+                .map(e => ({ source: e.from, target: e.to }));
+
+            graphData = { nodes: rawNodes, links: rawLinks };
+
+            if(rawNodes.length === 0) {
+                showError("No memory nodes returned from the database.");
+                return;
+            }
+
+            Graph = ForceGraph3D()
+                (document.getElementById('3d-graph'))
+                .backgroundColor('#050508')
+                .showNavInfo(true)
+                .nodeRelSize(3)
+                .nodeVal(node => node.val || 5)
+                .nodeColor(node => node.color || '#fff')
+                .nodeLabel(node => `${node.label}`)
+                .nodeOpacity(0.9)
+                .linkWidth(1)
+                .linkColor(link => 'rgba(0, 229, 255, 0.3)')
+                .linkDirectionalParticles(2)
+                .linkDirectionalParticleWidth(1.5)
+                .linkDirectionalParticleSpeed(0.005)
+                .onNodeClick(node => {
+                    document.getElementById('detail-type').innerText = node.group;
+                    document.getElementById('detail-title').innerText = node.label;
+                    document.getElementById('detail-text').innerText = node.details || "No payload.";
+                    document.getElementById('detail-panel').classList.add('active');
+
+                    // Safe camera fly-in
+                    const distance = 80;
+                    const distRatio = 1 + distance/Math.hypot(node.x, node.y, node.z);
+                    Graph.cameraPosition(
+                        { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio },
+                        node,
+                        2000
+                    );
+                });
+
+            applyFilters();
+            
+            // Simple camera drift
+            let angle = 0;
+            setInterval(() => {
+                if (Graph && !document.getElementById('detail-panel').classList.contains('active')) {
+                    angle += 0.002;
+                    Graph.cameraPosition({ x: 400 * Math.sin(angle), z: 400 * Math.cos(angle) });
+                }
+            }, 30);
+
+        } catch(e) {
+            showError("Exception building graph: " + e.toString());
+        }
+    }
+
+    function applyFilters() {
+        if(!Graph) return;
+        
+        // Safely map/filter without mutating the original graphData
+        const nodes = graphData.nodes.filter(n => {
+            if (!activeFilters.has(n.group)) return false;
+            if (searchQuery) {
+                const txt = (n.label + " " + (n.details || "")).toLowerCase();
+                if (!txt.includes(searchQuery)) return false;
+            }
+            return true;
+        });
+
+        // Reconstruct links cleanly
+        const nodeIds = new Set(nodes.map(n => n.id));
+        const links = graphData.links.filter(l => {
+            // Under the hood 3d force graph changes source/target from strings to objects
+            const s = (typeof l.source === 'object') ? l.source.id : l.source;
+            const t = (typeof l.target === 'object') ? l.target.id : l.target;
+            return nodeIds.has(s) && nodeIds.has(t);
+        }).map(l => ({
+            source: (typeof l.source === 'object') ? l.source.id : l.source,
+            target: (typeof l.target === 'object') ? l.target.id : l.target
+        }));
+
+        Graph.graphData({ nodes: [...nodes], links: [...links] });
+        
+        document.getElementById('stat-nodes').innerText = nodes.length;
+        document.getElementById('stat-edges').innerText = links.length;
+    }
+
+    // Boot
+    initGraph();
+</script>
+</body>
+</html>

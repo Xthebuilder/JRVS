@@ -22,7 +22,7 @@ import sys
 import asyncio
 from pathlib import Path
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone, timezone
 import uuid
 
 # Import MCP first
@@ -84,7 +84,7 @@ def track_request(tool_name: str):
                 client_id="unknown"  # Would come from auth
             )
 
-            start_time = datetime.utcnow()
+            start_time = datetime.now(timezone.utc)
             success = False
             error_type = None
             slot_acquired = False
@@ -119,13 +119,13 @@ def track_request(tool_name: str):
                     resource_manager.release_request_slot(request_id)
 
                 # Record metrics
-                duration_ms = (datetime.utcnow() - start_time).total_seconds() * 1000
+                duration_ms = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
 
                 request_metrics = RequestMetrics(
                     tool_name=tool_name,
                     success=success,
                     duration_ms=duration_ms,
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     error_type=error_type
                 )
                 metrics.record_request(request_metrics)
@@ -432,7 +432,7 @@ async def create_calendar_event(
     reminder_minutes: int = 0
 ) -> Dict[str, Any]:
     """Create calendar event with validation"""
-    from datetime import datetime
+    from datetime import datetime, timezone, timezone
 
     try:
         await calendar.initialize()

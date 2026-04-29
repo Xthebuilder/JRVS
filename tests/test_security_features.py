@@ -199,7 +199,7 @@ def test_pydantic_models():
         assert 'CodeExecuteRequest' in classes, "CodeExecuteRequest class not found"
         
         # Check for validators
-        assert '@validator' in web_server_content, "Validators not found"
+        assert '@field_validator' in web_server_content, "Validators not found"
         
         print("✓ Test 8: Pydantic validation models defined with proper structure")
         return True
