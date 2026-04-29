@@ -258,6 +258,7 @@ class CronScheduler:
         self._running = False
         self._task: Optional[asyncio.Task] = None
         self._notify: Optional[Callable[[str], None]] = None
+        self._active_jobs = set()
 
     def set_llm_client(self, client) -> None:
         self._llm_client = client
@@ -426,6 +427,9 @@ class CronScheduler:
             try:
                 due = await _get_due_jobs()
                 for job in due:
+                    if job["id"] in self._active_jobs:
+                        continue
+                    self._active_jobs.add(job["id"])
                     asyncio.create_task(self._run_job(job))
             except Exception as exc:
                 log.error("CronScheduler loop error: %s", exc)
@@ -524,6 +528,8 @@ class CronScheduler:
                 f":x: *Scheduled job failed* — _{job['description']}_\nError: {exc}",
                 channel_key="alerts",
             )
+        finally:
+            self._active_jobs.discard(job_id)
 
 
 # Global singleton
