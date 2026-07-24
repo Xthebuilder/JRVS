@@ -113,10 +113,11 @@ async def main() -> None:
     # --- API server (uvicorn) ---
     import uvicorn
     from api.server import app
+    from config import JRVS_SERVER_HOST, JRVS_SERVER_PORT
 
     def _make_uvicorn_coro():
         cfg = uvicorn.Config(
-            app, host="127.0.0.1", port=8000,
+            app, host=JRVS_SERVER_HOST, port=JRVS_SERVER_PORT,
             log_level="warning", lifespan="off",
         )
         return uvicorn.Server(cfg).serve()
@@ -128,7 +129,7 @@ async def main() -> None:
             name="supervise-uvicorn",
         )
     )
-    log.info("API server running on :8000 (supervised)")
+    log.info("API server running on %s:%d (supervised)", JRVS_SERVER_HOST, JRVS_SERVER_PORT)
 
     # --- Slack listener ---
     # Slack is already started inside cli.initialize() via asyncio.create_task().

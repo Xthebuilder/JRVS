@@ -24,9 +24,11 @@ from core.logging_setup import setup_logging
 setup_logging()
 
 from cli.themes import theme
+import os
+from config import JRVS_SERVER_HOST, JRVS_SERVER_PORT
 
 
-DAEMON_URL = "http://127.0.0.1:8000"
+DAEMON_URL = os.environ.get("JRVS_DAEMON_URL", f"http://{JRVS_SERVER_HOST}:{JRVS_SERVER_PORT}")
 SESSION_ID = str(uuid.uuid4())
 
 
