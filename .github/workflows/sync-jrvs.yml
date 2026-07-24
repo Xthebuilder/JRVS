@@ -1,0 +1,24 @@
+name: Push to JRVS Repository
+
+on:
+  push:
+    branches:
+      - main
+      - public-release
+  workflow_dispatch:
+
+jobs:
+  sync-to-jrvs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push to public repository
+        env:
+          TARGET_REPO_URL: https://x-access-token:${{ secrets.TARGET_REPO_PAT }}@github.com/Xthebuilder/JRVS.git
+        run: |
+          git remote add jrvs $TARGET_REPO_URL
+          git push jrvs HEAD:${{ github.ref_name }} --force
