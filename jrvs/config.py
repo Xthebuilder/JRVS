@@ -60,6 +60,13 @@ class Config:
     ]
     GOOGLE_LIST_LIMIT: int = int(os.getenv("GOOGLE_LIST_LIMIT", "10"))
 
+    # ── Nextcloud (CalDAV) ───────────────────────────────────────────────
+    NEXTCLOUD_URL: str          = os.getenv("NEXTCLOUD_URL", "")
+    NEXTCLOUD_USERNAME: str     = os.getenv("NEXTCLOUD_USER", os.getenv("NEXTCLOUD_USERNAME", ""))
+    NEXTCLOUD_APP_PASSWORD: str = os.getenv("NEXTCLOUD_APP_PASSWORD", "")
+    NEXTCLOUD_CALENDAR: str     = os.getenv("NEXTCLOUD_CALENDAR", "")
+    NEXTCLOUD_LIST_LIMIT: int   = int(os.getenv("NEXTCLOUD_LIST_LIMIT", "20"))
+
     # ── Autonomous Agent ─────────────────────────────────────────────────
     AGENT_GOALS_FILE: Path = Path(
         os.getenv("AGENT_GOALS_FILE", str(Path.home() / "JRVS" / "goals.yaml"))

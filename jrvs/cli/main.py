@@ -7,6 +7,7 @@ Usage
   jrvs search "<query>"       Brave + YouTube search → embed → FAISS → results
   jrvs ask    "<question>"    RAG query: FAISS context → Ollama → answer
   jrvs google <...>           Google Workspace commands
+  jrvs nextcloud <...>        Nextcloud calendar (CalDAV) commands
   jrvs agent  <...>           Autonomous agent commands
 """
 
@@ -33,6 +34,9 @@ _BANNER = (
     "  [bold cyan]jrvs google docs list[/]            Recent documents\n"
     "  [bold cyan]jrvs google sheets list[/]          Recent spreadsheets\n"
     "  [bold cyan]jrvs google calendar list[/]        Upcoming events\n\n"
+    "[bold green]Nextcloud (CalDAV)[/]\n"
+    "  [bold cyan]jrvs nextcloud list[/]              Upcoming events\n"
+    "  [bold cyan]jrvs nextcloud create[/]            Create an event\n\n"
     "[bold green]Autonomous Agent[/]\n"
     "  [bold cyan]jrvs agent run[/]                   Run scheduled goals\n"
     "  [bold cyan]jrvs agent goals[/]                 List configured goals\n"
@@ -158,8 +162,10 @@ def ask(question: str, raw: bool) -> None:
 # Register sub-groups
 # ─────────────────────────────────────────────────────────────────────────────
 
-from jrvs.cli.google import google  # noqa: E402
-from jrvs.cli.agent import agent    # noqa: E402
+from jrvs.cli.google import google        # noqa: E402
+from jrvs.cli.nextcloud import nextcloud  # noqa: E402
+from jrvs.cli.agent import agent          # noqa: E402
 
 main.add_command(google)
+main.add_command(nextcloud)
 main.add_command(agent)
