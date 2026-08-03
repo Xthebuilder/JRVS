@@ -1,470 +1,297 @@
-// WebSocket connection
-let ws = null;
-let currentSessionId = null;
+/* ═══════════════════════════════════════════════════════════
+   TENSORLINK — MARKETING SITE JAVASCRIPT
+═══════════════════════════════════════════════════════════ */
 
-// Initialize
+// ── UTILITY ─────────────────────────────────────────────────
+const $ = (sel, ctx = document) => ctx.querySelector(sel);
+const $$ = (sel, ctx = document) => [...ctx.querySelectorAll(sel)];
+
+// ── NAV: scroll state + mobile toggle ───────────────────────
+const navbar = $('#navbar');
+const mobileToggle = $('#mobileToggle');
+const navLinks = $('#navLinks');
+
+window.addEventListener('scroll', () => {
+  navbar.classList.toggle('scrolled', window.scrollY > 20);
+}, { passive: true });
+
+mobileToggle.addEventListener('click', () => {
+  navLinks.classList.toggle('open');
+  const spans = $$('span', mobileToggle);
+  if (navLinks.classList.contains('open')) {
+    spans[0].style.transform = 'translateY(7px) rotate(45deg)';
+    spans[1].style.opacity = '0';
+    spans[2].style.transform = 'translateY(-7px) rotate(-45deg)';
+  } else {
+    spans.forEach(s => { s.style.transform = ''; s.style.opacity = ''; });
+  }
+});
+
+// Close nav when a link is clicked
+$$('a', navLinks).forEach(a => {
+  a.addEventListener('click', () => {
+    navLinks.classList.remove('open');
+    $$('span', mobileToggle).forEach(s => { s.style.transform = ''; s.style.opacity = ''; });
+  });
+});
+
+// ── COUNTER ANIMATION ────────────────────────────────────────
+function animateCounter(el) {
+  const target = parseInt(el.dataset.target, 10);
+  const start = parseInt(el.textContent, 10);
+  const duration = 1600;
+  const step = (timestamp, startTime) => {
+    const progress = Math.min((timestamp - startTime) / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    el.textContent = Math.round(start + (target - start) * eased);
+    if (progress < 1) requestAnimationFrame(ts => step(ts, startTime));
+  };
+  requestAnimationFrame(ts => step(ts, ts));
+}
+
+// ── INTERSECTION OBSERVER (reveal + counters) ─────────────────
+const revealObs = new IntersectionObserver(entries => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+      revealObs.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.12 });
+
+const counterObs = new IntersectionObserver(entries => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      animateCounter(entry.target);
+      counterObs.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.5 });
+
 document.addEventListener('DOMContentLoaded', () => {
-    connect();
-    autoResizeTextarea();
-});
-
-// WebSocket Connection
-function connect() {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    ws = new WebSocket(`${protocol}//${window.location.host}/ws/chat`);
-
-    ws.onopen = () => {
-        updateStatus('Connected', true);
-        console.log('Connected to JRVS');
-    };
-
-    ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        handleMessage(data);
-    };
-
-    ws.onclose = () => {
-        updateStatus('Disconnected', false);
-        setTimeout(connect, 3000);
-    };
-
-    ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        updateStatus('Error', false);
-    };
-}
-
-function updateStatus(text, connected) {
-    const statusText = document.getElementById('statusText');
-    const statusDot = document.querySelector('.status-dot');
-
-    statusText.textContent = text;
-    statusDot.style.background = connected ? '#10a37f' : '#ef4444';
-}
-
-// Message Handling
-function handleMessage(data) {
-    switch(data.type) {
-        case 'system':
-            if (data.session_id) {
-                currentSessionId = data.session_id;
-            }
-            addSystemMessage(data.message);
-            break;
-        case 'status':
-            showStatus(data.message);
-            break;
-        case 'tools':
-            hideStatus();
-            showToolsUsed(data.tools);
-            break;
-        case 'response':
-            hideStatus();
-            addAssistantMessage(data.message, data.timestamp);
-            break;
-        case 'error':
-            hideStatus();
-            addSystemMessage(`Error: ${data.message}`);
-            break;
-    }
-}
-
-// Message Display
-function addUserMessage(text) {
-    hideWelcomeScreen();
-    const messagesDiv = document.getElementById('messages');
-
-    const messageDiv = document.createElement('div');
-    messageDiv.className = 'message';
-    messageDiv.innerHTML = `
-        <div class="message-header">
-            <div class="message-avatar user-avatar">👤</div>
-            <span class="message-role">You</span>
-        </div>
-        <div class="message-content">${escapeHtml(text)}</div>
-    `;
-
-    messagesDiv.appendChild(messageDiv);
-    scrollToBottom();
-}
-
-function addAssistantMessage(text, timestamp) {
-    hideWelcomeScreen();
-    const messagesDiv = document.getElementById('messages');
-
-    const messageDiv = document.createElement('div');
-    messageDiv.className = 'message';
-
-    const formattedText = formatMessage(text);
-    const timeString = timestamp ? new Date(timestamp).toLocaleTimeString() : '';
-
-    messageDiv.innerHTML = `
-        <div class="message-header">
-            <div class="message-avatar assistant-avatar">🤖</div>
-            <span class="message-role">JRVS</span>
-        </div>
-        <div class="message-content">
-            ${formattedText}
-            ${timeString ? `<div class="timestamp">${timeString}</div>` : ''}
-        </div>
-    `;
-
-    messagesDiv.appendChild(messageDiv);
-    scrollToBottom();
-}
-
-function addSystemMessage(text) {
-    hideWelcomeScreen();
-    const messagesDiv = document.getElementById('messages');
-
-    const messageDiv = document.createElement('div');
-    messageDiv.className = 'system-message';
-    messageDiv.textContent = text;
-
-    messagesDiv.appendChild(messageDiv);
-    scrollToBottom();
-}
-
-function showToolsUsed(tools) {
-    const messagesDiv = document.getElementById('messages');
-
-    const toolsDiv = document.createElement('div');
-    toolsDiv.className = 'tools-badge';
-    toolsDiv.innerHTML = `
-        🔧 Tools Used: ${tools.join(', ')}
-    `;
-
-    messagesDiv.appendChild(toolsDiv);
-    scrollToBottom();
-}
-
-function showStatus(text) {
-    hideWelcomeScreen();
-    hideStatus(); // Remove previous status
-
-    const messagesDiv = document.getElementById('messages');
-
-    const statusDiv = document.createElement('div');
-    statusDiv.className = 'status-message';
-    statusDiv.id = 'currentStatus';
-    statusDiv.textContent = text;
-
-    messagesDiv.appendChild(statusDiv);
-    scrollToBottom();
-}
-
-function hideStatus() {
-    const status = document.getElementById('currentStatus');
-    if (status) status.remove();
-}
-
-function hideWelcomeScreen() {
-    const welcome = document.getElementById('welcomeScreen');
-    if (welcome) {
-        welcome.style.display = 'none';
-    }
-}
-
-// Message Formatting
-function formatMessage(text) {
-    // Simple markdown-like formatting
-    let formatted = escapeHtml(text);
-
-    // Code blocks
-    formatted = formatted.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
-
-    // Inline code
-    formatted = formatted.replace(/`([^`]+)`/g, '<code>$1</code>');
-
-    // Bold
-    formatted = formatted.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-
-    // Lists
-    formatted = formatted.replace(/^- (.+)$/gm, '• $1');
-
-    // Line breaks
-    formatted = formatted.replace(/\n/g, '<br>');
-
-    return formatted;
-}
-
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-// Sending Messages
-function sendMessage() {
-    const input = document.getElementById('messageInput');
-    const message = input.value.trim();
-
-    if (!message || !ws || ws.readyState !== WebSocket.OPEN) return;
-
-    addUserMessage(message);
-    ws.send(JSON.stringify({ message }));
-    input.value = '';
-    autoResizeTextarea();
-
-    // Disable send button temporarily
-    const sendBtn = document.getElementById('sendButton');
-    sendBtn.disabled = true;
-    setTimeout(() => sendBtn.disabled = false, 1000);
-}
-
-function sendQuickMessage(message) {
-    document.getElementById('messageInput').value = message;
-    sendMessage();
-}
-
-function quickCommand(command) {
-    sendQuickMessage(command);
-}
-
-// Input Handling
-function handleKeyPress(event) {
-    if (event.key === 'Enter' && !event.shiftKey) {
-        event.preventDefault();
-        sendMessage();
-    }
-}
-
-function autoResizeTextarea() {
-    const textarea = document.getElementById('messageInput');
-    textarea.style.height = 'auto';
-    textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
-}
-
-document.getElementById('messageInput').addEventListener('input', autoResizeTextarea);
-
-// Utility
-function scrollToBottom() {
-    const container = document.getElementById('chatContainer');
-    container.scrollTop = container.scrollHeight;
-}
-
-function newChat() {
-    const messagesDiv = document.getElementById('messages');
-    messagesDiv.innerHTML = '';
-    document.getElementById('welcomeScreen').style.display = 'block';
-}
-
-// Sidebar
-function toggleSidebar() {
-    const sidebar = document.getElementById('sidebar');
-    sidebar.classList.toggle('active');
-}
-
-// Modals
-function openModal(modalId) {
-    const modal = document.getElementById(modalId);
-    modal.classList.add('active');
-}
-
-function closeModal(modalId) {
-    const modal = document.getElementById(modalId);
-    modal.classList.remove('active');
-}
-
-// Close modal on background click
-document.querySelectorAll('.modal').forEach(modal => {
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
-            modal.classList.remove('active');
-        }
+  // Add reveal class to animatable sections
+  const revealTargets = [
+    '#how-it-works .step-card',
+    '#features .feature-card',
+    '#pricing .pricing-card',
+    '#testimonials .testimonial-card',
+    '#faq .faq-item',
+    '#blog .blog-card',
+    '.metric-item',
+    '#demo .demo-container',
+    '.stack-bar-wrapper',
+  ];
+  revealTargets.forEach(sel => {
+    $$(sel).forEach((el, i) => {
+      el.classList.add('reveal');
+      if (i < 4) el.classList.add(`reveal-delay-${i + 1}`);
+      revealObs.observe(el);
     });
+  });
+
+  // Counters
+  $$('[data-target]').forEach(el => counterObs.observe(el));
+
+  // Init demo
+  initDemo();
+  initLatencyFlicker();
 });
 
-// Calendar
-async function showCalendar() {
-    openModal('calendarModal');
-    const content = document.getElementById('calendarContent');
-    content.innerHTML = 'Loading calendar...';
+// ── FAQ ACCORDION ─────────────────────────────────────────────
+function toggleFaq(id) {
+  const item = document.getElementById(id);
+  const answer = $('.faq-answer', item);
+  const isOpen = item.classList.contains('open');
 
-    try {
-        const response = await fetch('/api/calendar/month');
-        const data = await response.json();
+  // Close all
+  $$('.faq-item.open').forEach(openItem => {
+    openItem.classList.remove('open');
+    $('.faq-answer', openItem).classList.remove('open');
+  });
 
-        let html = `<div class="calendar-ascii">${data.calendar}</div>`;
+  // Open clicked if it wasn't open
+  if (!isOpen) {
+    item.classList.add('open');
+    answer.classList.add('open');
+  }
+}
 
-        if (data.events && Object.keys(data.events).length > 0) {
-            html += '<div class="event-list"><h3>Events this month:</h3>';
+// ── DEMO WIDGET ───────────────────────────────────────────────
+const DEMO_CONVERSATIONS = [
+  {
+    user: 'Summarize the Q2 sales report and flag any anomalies.',
+    ai: 'Reading Q2_Sales_Report.pdf... Found 3 anomalies: \n• June 12–14 revenue dip (−34%) — likely holiday weekend\n• Widget Pro category outperformed forecast by +41%\n• 2 accounts flagged for 90+ day overdue status.\nShall I draft a summary email for the leadership team?'
+  },
+  {
+    user: 'Schedule a follow-up with Pacific Logistics for next Tuesday at 2pm.',
+    ai: 'Done. I\'ve added "Follow-up: Pacific Logistics" to your calendar for Tuesday, July 29 at 2:00 PM PDT. Calendar invite sent to contact@pacificlogistics.com. Shall I add an agenda or any prep notes?'
+  },
+  {
+    user: 'What are the latest HIPAA requirements for AI tools in healthcare?',
+    ai: 'Searching internal knowledge base + web... Key 2024–2025 HIPAA requirements for AI:\n• AI tools processing PHI must have signed BAAs\n• On-premise deployment removes most cloud compliance risk\n• TensorLink\'s local deployment already satisfies these requirements — your data never leaves your network.'
+  },
+  {
+    user: 'Draft a LinkedIn post about our new AI deployment service.',
+    ai: '📝 Draft:\n\n"Big news: [Company] just deployed a private AI assistant — powered by LLaMA 3.2 — running entirely on our own hardware. Zero cloud costs. Zero data risk. 100% private.\n\nThanks to TensorLink for making it seamless. If your business is still sending sensitive data to cloud AI, let\'s talk. 🔒"\n\nShall I adjust the tone or length?'
+  }
+];
 
-            for (const [day, events] of Object.entries(data.events).sort()) {
-                events.forEach(event => {
-                    const dt = new Date(event.event_date);
-                    const status = event.completed ? '✓' : '○';
-                    html += `
-                        <div class="event-item">
-                            <h4>${status} ${event.title}</h4>
-                            <p>${dt.toLocaleDateString()} at ${dt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
-                            ${event.description ? `<p>${event.description}</p>` : ''}
-                        </div>
-                    `;
-                });
-            }
+let demoIdx = 0;
+let demoRunning = false;
 
-            html += '</div>';
-        }
+function initDemo() {
+  const chat = $('#demoChat');
+  if (!chat) return;
 
-        content.innerHTML = html;
-    } catch (error) {
-        content.innerHTML = `<p>Error loading calendar: ${error.message}</p>`;
+  runDemoConversation();
+}
+
+async function runDemoConversation() {
+  if (demoRunning) return;
+  demoRunning = true;
+
+  const chat = $('#demoChat');
+  const conv = DEMO_CONVERSATIONS[demoIdx % DEMO_CONVERSATIONS.length];
+  demoIdx++;
+
+  // Clear if too many messages
+  if (chat.children.length > 10) {
+    chat.innerHTML = '';
+  }
+
+  // Delay before user message
+  await sleep(1200);
+
+  // Type user message
+  await typeUserMessage(conv.user);
+  await sleep(600);
+
+  // Show AI typing indicator
+  const typingEl = showTyping();
+  await sleep(1500 + Math.random() * 800);
+  typingEl.remove();
+
+  // Show AI response
+  await showAIMessage(conv.ai);
+  await sleep(3500);
+
+  demoRunning = false;
+  runDemoConversation();
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function typeUserMessage(text) {
+  const chat = $('#demoChat');
+  const typingEl = $('#demoTyping');
+
+  // Animate the input field
+  if (typingEl) {
+    let displayed = '';
+    for (const char of text.slice(0, 60)) {
+      displayed += char;
+      typingEl.textContent = displayed;
+      await sleep(28 + Math.random() * 30);
     }
+    if (text.length > 60) typingEl.textContent = text.slice(0, 57) + '...';
+    await sleep(300);
+    typingEl.textContent = 'Ask your private AI anything...';
+  }
+
+  appendMessage('user', text, chat);
+  scrollChat(chat);
 }
 
-function showAddEvent() {
-    openModal('addEventModal');
-    // Set default date to today
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('eventDate').value = today;
-}
+async function showAIMessage(text) {
+  const chat = $('#demoChat');
+  const msgEl = appendMessage('ai', '', chat);
+  const bubble = $('.demo-msg-bubble', msgEl);
 
-async function submitEvent(e) {
-    e.preventDefault();
-
-    const title = document.getElementById('eventTitle').value;
-    const date = document.getElementById('eventDate').value;
-    const time = document.getElementById('eventTime').value;
-    const description = document.getElementById('eventDescription').value;
-
-    try {
-        const response = await fetch('/api/calendar/event', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({ title, date, time, description })
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            closeModal('addEventModal');
-            addSystemMessage(`✓ Event added: ${title} on ${date} at ${time}`);
-            document.getElementById('eventForm').reset();
-        } else {
-            alert('Failed to add event');
-        }
-    } catch (error) {
-        alert(`Error: ${error.message}`);
+  // Stream characters
+  const lines = text.split('\n');
+  for (const line of lines) {
+    for (const char of line) {
+      bubble.textContent += char;
+      await sleep(12 + Math.random() * 18);
     }
+    bubble.textContent += '\n';
+    scrollChat(chat);
+  }
 }
 
-// MCP
-async function showMCPServers() {
-    openModal('mcpModal');
-    const content = document.getElementById('mcpContent');
-    content.innerHTML = 'Loading MCP servers...';
-
-    try {
-        const response = await fetch('/api/mcp/servers');
-        const data = await response.json();
-
-        let html = '<h3>Connected Servers</h3>';
-
-        if (data.servers && data.servers.length > 0) {
-            html += '<div class="event-list">';
-            data.servers.forEach(server => {
-                const toolCount = data.tools_count[server] || 0;
-                html += `
-                    <div class="event-item">
-                        <h4>🔌 ${server}</h4>
-                        <p>${toolCount} tools available</p>
-                        <button class="btn-primary" onclick="showServerTools('${server}')">View Tools</button>
-                    </div>
-                `;
-            });
-            html += '</div>';
-        } else {
-            html += '<p>No MCP servers connected</p>';
-        }
-
-        content.innerHTML = html;
-    } catch (error) {
-        content.innerHTML = `<p>Error: ${error.message}</p>`;
-    }
+function appendMessage(role, text, chat) {
+  const div = document.createElement('div');
+  div.className = `demo-msg demo-msg--${role}`;
+  div.innerHTML = `
+    <div class="demo-msg-avatar">${role === 'user' ? 'YOU' : 'AI'}</div>
+    <div class="demo-msg-bubble">${text}</div>
+  `;
+  chat.appendChild(div);
+  scrollChat(chat);
+  return div;
 }
 
-async function showMCPTools() {
-    openModal('mcpModal');
-    const content = document.getElementById('mcpContent');
-    content.innerHTML = 'Loading tools...';
-
-    try {
-        const response = await fetch('/api/mcp/tools');
-        const data = await response.json();
-
-        let html = '<h3>Available MCP Tools</h3><div class="event-list">';
-
-        for (const [server, tools] of Object.entries(data.tools)) {
-            html += `<h4>🔌 ${server}</h4>`;
-            tools.forEach(tool => {
-                html += `
-                    <div class="event-item">
-                        <h4>🔧 ${tool.name}</h4>
-                        <p>${tool.description || 'No description'}</p>
-                    </div>
-                `;
-            });
-        }
-
-        html += '</div>';
-        content.innerHTML = html;
-    } catch (error) {
-        content.innerHTML = `<p>Error: ${error.message}</p>`;
-    }
+function showTyping() {
+  const chat = $('#demoChat');
+  const div = document.createElement('div');
+  div.className = 'demo-msg demo-msg--ai';
+  div.innerHTML = `
+    <div class="demo-msg-avatar">AI</div>
+    <div class="demo-msg-bubble">
+      <div class="demo-msg-typing">
+        <span></span><span></span><span></span>
+      </div>
+    </div>
+  `;
+  chat.appendChild(div);
+  scrollChat(chat);
+  return div;
 }
 
-async function showServerTools(server) {
-    const content = document.getElementById('mcpContent');
-    content.innerHTML = 'Loading tools...';
-
-    try {
-        const response = await fetch(`/api/mcp/tools?server=${server}`);
-        const data = await response.json();
-
-        let html = `<h3>Tools from ${server}</h3><div class="event-list">`;
-
-        if (data.tools && data.tools.length > 0) {
-            data.tools.forEach(tool => {
-                html += `
-                    <div class="event-item">
-                        <h4>🔧 ${tool.name}</h4>
-                        <p>${tool.description || 'No description'}</p>
-                    </div>
-                `;
-            });
-        } else {
-            html += '<p>No tools available</p>';
-        }
-
-        html += '</div>';
-        html += `<button class="btn-primary" onclick="showMCPServers()">← Back to Servers</button>`;
-        content.innerHTML = html;
-    } catch (error) {
-        content.innerHTML = `<p>Error: ${error.message}</p>`;
-    }
+function scrollChat(chat) {
+  chat.scrollTop = chat.scrollHeight;
 }
 
-// Models & Settings
-async function showModels() {
-    sendQuickMessage('/models');
+// Latency flicker
+function initLatencyFlicker() {
+  const el = $('#demoLatency');
+  if (!el) return;
+
+  setInterval(() => {
+    const val = 38 + Math.floor(Math.random() * 28);
+    el.textContent = `${val}ms`;
+  }, 2400);
 }
 
-function showThemes() {
-    sendQuickMessage('/theme');
+// ── FORM SUBMIT ───────────────────────────────────────────────
+function handleFormSubmit(e) {
+  e.preventDefault();
+  const btn = $('#formSubmitBtn');
+  const btnText = $('#formBtnText');
+
+  // Disable
+  btn.disabled = true;
+  btnText.textContent = 'Sending...';
+
+  // Simulate submission (replace with real endpoint)
+  setTimeout(() => {
+    const form = $('#contactForm');
+    const success = $('#formSuccess');
+    form.style.display = 'none';
+    success.style.display = 'block';
+  }, 1200);
 }
 
-function showScraper() {
-    const url = prompt('Enter URL to scrape:');
-    if (url) {
-        sendQuickMessage(`/scrape ${url}`);
-    }
-}
-
-function showSettings() {
-    sendQuickMessage('/stats');
-}
-
-function showAttachMenu() {
-    alert('File attachment coming soon!');
-}
+// ── SMOOTH SCROLL for anchor links ───────────────────────────
+document.addEventListener('click', e => {
+  const link = e.target.closest('a[href^="#"]');
+  if (!link) return;
+  const target = document.querySelector(link.getAttribute('href'));
+  if (!target) return;
+  e.preventDefault();
+  const offset = 70;
+  const top = target.getBoundingClientRect().top + window.scrollY - offset;
+  window.scrollTo({ top, behavior: 'smooth' });
+});

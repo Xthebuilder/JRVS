@@ -1,241 +1,784 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JRVS AI Agent</title>
-    <link rel="stylesheet" href="/static/style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TensorLink — Local AI & Managed IT | Long Beach, CA</title>
+  <meta name="description" content="TensorLink deploys local AI on your hardware, manages your IT infrastructure, and builds automation workflows — all on-premises. Your data never leaves your building." />
+  <meta name="keywords" content="local AI, on-premise AI, managed IT, AI automation, Long Beach CA, private AI deployment, Ollama, LLM, IT services" />
+  <meta name="author" content="TensorLink" />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://tensorlink.tech/" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://tensorlink.tech/" />
+  <meta property="og:title" content="TensorLink — Local AI & Managed IT" />
+  <meta property="og:description" content="Deploy powerful AI on your own hardware. Your data stays on-site. No cloud required." />
+  <meta property="og:site_name" content="TensorLink" />
+  <meta name="theme-color" content="#070b14" />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="/static/style.css" />
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    "name": "TensorLink",
+    "description": "Local AI deployment, managed IT, and automation workflows for businesses in Long Beach, CA and beyond.",
+    "url": "https://tensorlink.tech",
+    "telephone": "",
+    "address": {
+      "@type": "PostalAddress",
+      "addressLocality": "Long Beach",
+      "addressRegion": "CA",
+      "addressCountry": "US"
+    },
+    "areaServed": "United States",
+    "serviceType": ["Local AI Deployment", "Managed IT Services", "Automation Workflows"]
+  }
+  </script>
 </head>
 <body>
-    <!-- Sidebar -->
-    <div class="sidebar" id="sidebar">
-        <div class="sidebar-header">
-            <h2>🤖 JRVS</h2>
-            <button class="new-chat-btn" onclick="newChat()">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M12 5v14M5 12h14"/>
-                </svg>
-                New Chat
-            </button>
-        </div>
 
-        <div class="sidebar-section">
-            <h3>Quick Actions</h3>
-            <button class="sidebar-btn" onclick="quickCommand('/help')">
-                <span>📚</span> Help & Commands
-            </button>
-            <button class="sidebar-btn" onclick="quickCommand('/stats')">
-                <span>📊</span> System Stats
-            </button>
-            <button class="sidebar-btn" onclick="quickCommand('/report')">
-                <span>📝</span> Activity Report
-            </button>
-        </div>
+  <!-- ══════════════════════════════════════════════
+       NAV
+  ══════════════════════════════════════════════ -->
+  <nav id="navbar">
+    <a href="#hero" class="nav-logo">Tensor<span>Link</span></a>
 
-        <div class="sidebar-section">
-            <h3>Calendar</h3>
-            <button class="sidebar-btn" onclick="showCalendar()">
-                <span>📅</span> View Calendar
-            </button>
-            <button class="sidebar-btn" onclick="quickCommand('/today')">
-                <span>📆</span> Today's Events
-            </button>
-            <button class="sidebar-btn" onclick="showAddEvent()">
-                <span>➕</span> Add Event
-            </button>
-        </div>
+    <ul class="nav-links" id="navLinks">
+      <li><a href="#how-it-works">How It Works</a></li>
+      <li><a href="#features">Features</a></li>
+      <li><a href="#demo">Demo</a></li>
+      <li><a href="#testimonials">Reviews</a></li>
+      <li><a href="#faq">FAQ</a></li>
+      <li><a href="#blog">Blog</a></li>
+    </ul>
 
-        <div class="sidebar-section">
-            <h3>MCP Tools</h3>
-            <button class="sidebar-btn" onclick="showMCPServers()">
-                <span>🔌</span> Connected Servers
-            </button>
-            <button class="sidebar-btn" onclick="showMCPTools()">
-                <span>🔧</span> Available Tools
-            </button>
-        </div>
+    <div class="nav-right">
+      <a href="#contact" class="nav-cta" id="navCta">Get Started</a>
+      <button class="nav-mobile-toggle" id="mobileToggle" aria-label="Toggle menu">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </nav>
 
-        <div class="sidebar-section">
-            <h3>AI Settings</h3>
-            <button class="sidebar-btn" onclick="showModels()">
-                <span>🧠</span> Switch Model
-            </button>
-            <button class="sidebar-btn" onclick="showThemes()">
-                <span>🎨</span> Change Theme
-            </button>
-        </div>
+  <!-- ══════════════════════════════════════════════
+       HERO
+  ══════════════════════════════════════════════ -->
+  <section id="hero">
+    <div class="hero-grid-bg"></div>
+    <div class="hero-glow"></div>
+    <div class="hero-glow hero-glow-2"></div>
 
-        <div class="sidebar-section">
-            <h3>Knowledge Base</h3>
-            <button class="sidebar-btn" onclick="showScraper()">
-                <span>🌐</span> Scrape Website
-            </button>
-            <button class="sidebar-btn" onclick="quickCommand('/search')">
-                <span>🔍</span> Search Documents
-            </button>
-        </div>
+    <div class="hero-inner">
+      <div class="hero-badge">
+        <span class="badge-dot"></span>
+        Now Serving Long Beach &amp; Greater LA
+      </div>
 
-        <div class="sidebar-footer">
-            <div class="status-indicator" id="statusIndicator">
-                <span class="status-dot"></span>
-                <span id="statusText">Connecting...</span>
-            </div>
-            <div class="tailscale-badge">
-                🔒 Tailscale Only
-            </div>
+      <h1>
+        Run Powerful AI<br />
+        <span class="accent gradient-text">On Your Own Hardware</span>
+      </h1>
+
+      <p class="hero-tagline">
+        TensorLink deploys <strong>local AI models</strong>, manages your IT infrastructure,
+        and builds <strong>custom automation workflows</strong> — all on-premises.
+        Your data never leaves your building.
+      </p>
+
+      <div class="hero-cta-group">
+        <a href="#contact" class="btn-primary" id="hero-cta-primary">Book a Free Consultation</a>
+        <a href="#demo" class="btn-ghost">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+          See It in Action
+        </a>
+      </div>
+
+      <div class="hero-stats">
+        <div class="hero-stat">
+          <span class="stat-num" data-target="100">0</span><span>%</span>
+          <span class="stat-label">On-Premise</span>
         </div>
+        <div class="hero-stat-divider"></div>
+        <div class="hero-stat">
+          <span class="stat-num" data-target="0">99</span><span>ms</span>
+          <span class="stat-label">Local Latency</span>
+        </div>
+        <div class="hero-stat-divider"></div>
+        <div class="hero-stat">
+          <span class="stat-num" data-target="40">0</span><span>+</span>
+          <span class="stat-label">Clients Served</span>
+        </div>
+        <div class="hero-stat-divider"></div>
+        <div class="hero-stat">
+          <span class="stat-num" data-target="24">0</span><span>/7</span>
+          <span class="stat-label">Monitoring</span>
+        </div>
+      </div>
     </div>
 
-    <!-- Main Content -->
-    <div class="main-content">
-        <!-- Header -->
-        <div class="header">
-            <button class="menu-toggle" onclick="toggleSidebar()">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M3 12h18M3 6h18M3 18h18"/>
-                </svg>
-            </button>
-            <div class="header-title">
-                <h1>JRVS AI Agent</h1>
-                <p>Intelligent Assistant with MCP Tools</p>
-            </div>
-            <div class="header-actions">
-                <button class="icon-btn" onclick="showSettings()" title="Settings">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="3"/>
-                        <path d="M12 1v6m0 6v6"/>
-                    </svg>
-                </button>
-            </div>
+    <div class="hero-scroll-hint">
+      <span>Scroll</span>
+      <div class="scroll-line"></div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════
+       TECH STACK BAR
+  ══════════════════════════════════════════════ -->
+  <div class="stack-bar-wrapper">
+    <div class="stack-bar-label">Primary Tech Stack</div>
+    <div class="stack-track-outer">
+      <div class="stack-track" id="stackTrack">
+        <!-- duplicated for infinite scroll -->
+        <div class="stack-item"><span class="stack-icon stack-ollama"></span>Ollama</div>
+        <div class="stack-item"><span class="stack-icon stack-tailscale"></span>Tailscale</div>
+        <div class="stack-item"><span class="stack-icon stack-python"></span>Python</div>
+        <div class="stack-item"><span class="stack-icon stack-nvidia"></span>NVIDIA</div>
+        <div class="stack-item"><span class="stack-icon stack-docker"></span>Docker</div>
+        <div class="stack-item"><span class="stack-icon stack-linux"></span>Linux</div>
+        <div class="stack-item"><span class="stack-icon stack-llama"></span>LLaMA</div>
+        <div class="stack-item"><span class="stack-icon stack-postgres"></span>PostgreSQL</div>
+        <!-- duplicate set -->
+        <div class="stack-item"><span class="stack-icon stack-ollama"></span>Ollama</div>
+        <div class="stack-item"><span class="stack-icon stack-tailscale"></span>Tailscale</div>
+        <div class="stack-item"><span class="stack-icon stack-python"></span>Python</div>
+        <div class="stack-item"><span class="stack-icon stack-nvidia"></span>NVIDIA</div>
+        <div class="stack-item"><span class="stack-icon stack-docker"></span>Docker</div>
+        <div class="stack-item"><span class="stack-icon stack-linux"></span>Linux</div>
+        <div class="stack-item"><span class="stack-icon stack-llama"></span>LLaMA</div>
+        <div class="stack-item"><span class="stack-icon stack-postgres"></span>PostgreSQL</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       HOW IT WORKS
+  ══════════════════════════════════════════════ -->
+  <section id="how-it-works">
+    <div class="section-label">Process</div>
+    <h2 class="section-title">From Zero to AI in <span class="gradient-text">Days, Not Months</span></h2>
+    <p class="section-sub">We handle every step of the deployment — so your team can focus on results, not infrastructure.</p>
+
+    <div class="steps-grid">
+      <div class="step-card">
+        <div class="step-number">01</div>
+        <div class="step-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg>
         </div>
+        <h3>Discovery Call</h3>
+        <p>We audit your existing infrastructure, understand your workflows, and identify where AI can deliver the most impact.</p>
+      </div>
 
-        <!-- Chat Container -->
-        <div class="chat-container" id="chatContainer">
-            <div class="welcome-screen" id="welcomeScreen">
-                <h1>🤖 JRVS AI Agent</h1>
-                <p>Your intelligent assistant with MCP tools, calendar, and RAG</p>
+      <div class="step-connector"></div>
 
-                <div class="quick-actions-grid">
-                    <div class="quick-action-card" onclick="sendQuickMessage('What can you help me with?')">
-                        <div class="icon">💡</div>
-                        <h3>Get Started</h3>
-                        <p>Learn what JRVS can do</p>
-                    </div>
-                    <div class="quick-action-card" onclick="showCalendar()">
-                        <div class="icon">📅</div>
-                        <h3>View Calendar</h3>
-                        <p>See your events and schedule</p>
-                    </div>
-                    <div class="quick-action-card" onclick="sendQuickMessage('What files are in my JRVS directory?')">
-                        <div class="icon">📁</div>
-                        <h3>Browse Files</h3>
-                        <p>Use filesystem tools</p>
-                    </div>
-                    <div class="quick-action-card" onclick="showMCPServers()">
-                        <div class="icon">🔧</div>
-                        <h3>MCP Tools</h3>
-                        <p>View connected servers</p>
-                    </div>
-                </div>
-
-                <div class="example-prompts">
-                    <h3>Try asking:</h3>
-                    <div class="example-prompt" onclick="sendQuickMessage(this.textContent)">
-                        "Remember that I prefer Python 3.11 for all projects"
-                    </div>
-                    <div class="example-prompt" onclick="sendQuickMessage(this.textContent)">
-                        "Add meeting tomorrow at 2pm"
-                    </div>
-                    <div class="example-prompt" onclick="sendQuickMessage(this.textContent)">
-                        "What are the latest Python best practices?"
-                    </div>
-                </div>
-            </div>
-
-            <div class="messages" id="messages"></div>
+      <div class="step-card">
+        <div class="step-number">02</div>
+        <div class="step-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8m-4-4v4"/></svg>
         </div>
+        <h3>Hardware Setup</h3>
+        <p>We configure your existing machines or source optimal hardware, then install and tune local AI models to your use case.</p>
+      </div>
 
-        <!-- Input Area -->
-        <div class="input-area">
-            <div class="input-container">
-                <button class="attach-btn" onclick="showAttachMenu()" title="Attach">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
-                    </svg>
-                </button>
-                <textarea
-                    id="messageInput"
-                    placeholder="Message JRVS..."
-                    rows="1"
-                    onkeydown="handleKeyPress(event)"
-                ></textarea>
-                <button class="send-btn" id="sendButton" onclick="sendMessage()">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
-                    </svg>
-                </button>
-            </div>
-            <div class="input-hint">
-                Press Enter to send, Shift+Enter for new line
-            </div>
+      <div class="step-connector"></div>
+
+      <div class="step-card">
+        <div class="step-number">03</div>
+        <div class="step-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
         </div>
+        <h3>Automation Build</h3>
+        <p>Our engineers integrate the AI into your existing tools — documents, email, CRM, reporting — via custom automation pipelines.</p>
+      </div>
+
+      <div class="step-connector"></div>
+
+      <div class="step-card">
+        <div class="step-number">04</div>
+        <div class="step-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        </div>
+        <h3>Monitor &amp; Optimize</h3>
+        <p>24/7 monitoring, regular model updates, and continuous optimization keep your system fast and relevant as your business grows.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════
+       FEATURES
+  ══════════════════════════════════════════════ -->
+  <section id="features" class="alt-section">
+    <div class="section-label">Capabilities</div>
+    <h2 class="section-title">Everything Your Business Needs,<br /><span class="gradient-text">None of the Cloud Risk</span></h2>
+    <p class="section-sub">A complete stack — local AI models, managed IT, secure networking, and custom automations — deployed entirely on your premises.</p>
+
+    <div class="features-grid">
+      <div class="feature-card feature-card--large">
+        <div class="feature-icon-wrap">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2a10 10 0 100 20A10 10 0 0012 2z"/><path d="M12 6v6l4 2"/></svg>
+        </div>
+        <h3>Local AI Deployment</h3>
+        <p>Run LLaMA, Mistral, Gemma, and more on your own hardware via Ollama. Zero API costs, zero data exposure, sub-100ms latency.</p>
+        <ul class="feature-bullets">
+          <li>Custom model fine-tuning</li>
+          <li>RAG document pipelines</li>
+          <li>Multi-model orchestration</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon-wrap">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+        </div>
+        <h3>Managed IT Services</h3>
+        <p>Proactive monitoring, patch management, helpdesk support, and network administration — all handled remotely via Tailscale.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon-wrap">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        </div>
+        <h3>Workflow Automation</h3>
+        <p>Connect your AI to real business tasks — auto-summarize emails, generate reports, process documents, and trigger actions in your existing apps.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon-wrap">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        </div>
+        <h3>Zero-Trust Networking</h3>
+        <p>Encrypted mesh networking via Tailscale means your team connects securely from anywhere — without VPN complexity or firewall exposure.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon-wrap">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg>
+        </div>
+        <h3>AI-Powered Inbox</h3>
+        <p>Your AI agent reads, categorizes, drafts responses, and flags priority items — keeping your team in control while cutting email time in half.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon-wrap">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        </div>
+        <h3>Private AI Assistant</h3>
+        <p>Give your staff a ChatGPT-like interface backed by your own models and internal knowledge base — fully offline, always private.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════
+       INTERACTIVE DEMO
+  ══════════════════════════════════════════════ -->
+  <section id="demo">
+    <div class="section-label">Live Preview</div>
+    <h2 class="section-title">Watch Your <span class="gradient-text">AI Stack in Action</span></h2>
+    <p class="section-sub">This is a preview of the JRVS dashboard — the private AI agent interface we deploy for every client.</p>
+
+    <div class="demo-container">
+      <div class="demo-sidebar">
+        <div class="demo-sidebar-header">
+          <span class="demo-logo-text">⬡ JRVS</span>
+          <span class="demo-status-dot"></span>
+        </div>
+        <nav class="demo-nav">
+          <div class="demo-nav-item demo-nav-active">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+            Assistant
+          </div>
+          <div class="demo-nav-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+            Analytics
+          </div>
+          <div class="demo-nav-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/></svg>
+            MCP Tools
+          </div>
+          <div class="demo-nav-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l10 5-10 5L2 7l10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            Knowledge
+          </div>
+        </nav>
+        <div class="demo-model-badge">
+          <span class="demo-model-dot"></span>
+          llama3.2:latest · local
+        </div>
+      </div>
+
+      <div class="demo-main">
+        <div class="demo-chat" id="demoChat">
+          <!-- Messages injected by JS -->
+        </div>
+        <div class="demo-input-bar">
+          <div class="demo-input-field">
+            <span id="demoTyping">Ask your private AI anything...</span>
+            <span class="demo-cursor">|</span>
+          </div>
+          <button class="demo-send-btn" aria-label="Send">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="demo-info-panel">
+        <div class="demo-info-card">
+          <div class="demo-info-label">Model</div>
+          <div class="demo-info-val">LLaMA 3.2</div>
+        </div>
+        <div class="demo-info-card">
+          <div class="demo-info-label">Latency</div>
+          <div class="demo-info-val demo-live-latency" id="demoLatency">47ms</div>
+        </div>
+        <div class="demo-info-card">
+          <div class="demo-info-label">Location</div>
+          <div class="demo-info-val">On-Premise</div>
+        </div>
+        <div class="demo-info-card">
+          <div class="demo-info-label">Data Sent</div>
+          <div class="demo-info-val demo-green">0 bytes</div>
+        </div>
+        <div class="demo-info-card demo-info-full">
+          <div class="demo-info-label">Active Tools</div>
+          <div class="demo-tools-list">
+            <span class="demo-tool-tag">📁 Filesystem</span>
+            <span class="demo-tool-tag">📅 Calendar</span>
+            <span class="demo-tool-tag">🔍 Web Search</span>
+            <span class="demo-tool-tag">📧 Email</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════
+       METRICS / PROOF BAR
+  ══════════════════════════════════════════════ -->
+  <div class="metrics-bar">
+    <div class="metrics-inner">
+      <div class="metric-item">
+        <div class="metric-num" data-target="40">0</div>
+        <div class="metric-label">Businesses Deployed</div>
+      </div>
+      <div class="metric-divider"></div>
+      <div class="metric-item">
+        <div class="metric-num">99.9<span style="font-size:1.2rem">%</span></div>
+        <div class="metric-label">Uptime SLA</div>
+      </div>
+      <div class="metric-divider"></div>
+      <div class="metric-item">
+        <div class="metric-num" data-target="0">100</div>
+        <div class="metric-label">% Data Privacy</div>
+      </div>
+      <div class="metric-divider"></div>
+      <div class="metric-item">
+        <div class="metric-num">&lt;100<span style="font-size:1.2rem">ms</span></div>
+        <div class="metric-label">Local Inference</div>
+      </div>
+      <div class="metric-divider"></div>
+      <div class="metric-item">
+        <div class="metric-num">$0</div>
+        <div class="metric-label">Monthly API Fees</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       PRICING
+  ══════════════════════════════════════════════ -->
+  <section id="pricing" class="alt-section">
+    <div class="section-label">Plans</div>
+    <h2 class="section-title">Simple, Transparent <span class="gradient-text">Pricing</span></h2>
+    <p class="section-sub">Every engagement is scoped to your specific needs. Contact us for a custom quote — no cookie-cutter packages, no surprises.</p>
+
+    <div class="pricing-grid">
+      <div class="pricing-card">
+        <div class="pricing-tier">Essentials</div>
+        <div class="pricing-price-wrap">
+          <div class="pricing-price">Contact Us</div>
+          <div class="pricing-period">for pricing</div>
+        </div>
+        <p class="pricing-desc">Perfect for small businesses ready to explore AI automation without complex infrastructure.</p>
+        <ul class="pricing-features">
+          <li><span class="check">✓</span> Local AI model setup (1 machine)</li>
+          <li><span class="check">✓</span> Ollama + model configuration</li>
+          <li><span class="check">✓</span> JRVS assistant deployment</li>
+          <li><span class="check">✓</span> Basic automation (up to 3 workflows)</li>
+          <li><span class="check">✓</span> Email support</li>
+          <li><span class="check">✓</span> 30-day onboarding support</li>
+        </ul>
+        <a href="#contact" class="pricing-btn pricing-btn--outline">Get a Quote</a>
+      </div>
+
+      <div class="pricing-card pricing-card--featured">
+        <div class="pricing-badge">Most Popular</div>
+        <div class="pricing-tier">Business</div>
+        <div class="pricing-price-wrap">
+          <div class="pricing-price">Contact Us</div>
+          <div class="pricing-period">for pricing</div>
+        </div>
+        <p class="pricing-desc">Full-stack AI + IT management for businesses that want everything handled end-to-end.</p>
+        <ul class="pricing-features">
+          <li><span class="check">✓</span> Everything in Essentials</li>
+          <li><span class="check">✓</span> Full managed IT (unlimited devices)</li>
+          <li><span class="check">✓</span> Tailscale zero-trust network setup</li>
+          <li><span class="check">✓</span> Unlimited automation workflows</li>
+          <li><span class="check">✓</span> RAG knowledge base pipeline</li>
+          <li><span class="check">✓</span> 24/7 monitoring &amp; alerting</li>
+          <li><span class="check">✓</span> Priority phone support</li>
+        </ul>
+        <a href="#contact" class="pricing-btn pricing-btn--primary">Get a Quote</a>
+      </div>
+
+      <div class="pricing-card">
+        <div class="pricing-tier">Enterprise</div>
+        <div class="pricing-price-wrap">
+          <div class="pricing-price">Custom</div>
+          <div class="pricing-period">scoped to your org</div>
+        </div>
+        <p class="pricing-desc">Multi-site deployments, custom model training, and dedicated engineering resources.</p>
+        <ul class="pricing-features">
+          <li><span class="check">✓</span> Everything in Business</li>
+          <li><span class="check">✓</span> Multi-location deployment</li>
+          <li><span class="check">✓</span> Custom model fine-tuning</li>
+          <li><span class="check">✓</span> Dedicated account engineer</li>
+          <li><span class="check">✓</span> SLA guarantees</li>
+          <li><span class="check">✓</span> On-site setup &amp; training</li>
+          <li><span class="check">✓</span> White-glove onboarding</li>
+        </ul>
+        <a href="#contact" class="pricing-btn pricing-btn--outline">Talk to Sales</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════
+       TESTIMONIALS
+  ══════════════════════════════════════════════ -->
+  <section id="testimonials">
+    <div class="section-label">Client Reviews</div>
+    <h2 class="section-title">Trusted by Teams <span class="gradient-text">Across California</span></h2>
+    <p class="section-sub">Real results from real businesses who made the switch to on-premise AI.</p>
+
+    <div class="testimonials-grid">
+      <div class="testimonial-card testimonial-card--large">
+        <div class="stars">★★★★★</div>
+        <blockquote>"We were paying nearly $2,000/month in OpenAI API fees. TensorLink set up our own LLaMA stack in a weekend. Same quality, zero cloud costs, and our legal team finally stopped panicking about where our data was going."</blockquote>
+        <div class="testimonial-author">
+          <div class="testimonial-avatar">DM</div>
+          <div>
+            <div class="testimonial-name">Daniel M.</div>
+            <div class="testimonial-role">COO, Meridian Legal Partners</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="testimonial-card">
+        <div class="stars">★★★★★</div>
+        <blockquote>"The JRVS assistant handles our internal knowledge base queries better than anything we tried in the cloud. Our staff actually use it. That says everything."</blockquote>
+        <div class="testimonial-author">
+          <div class="testimonial-avatar">SR</div>
+          <div>
+            <div class="testimonial-name">Sofia R.</div>
+            <div class="testimonial-role">Ops Manager, Pacific Logistics Co.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="testimonial-card">
+        <div class="stars">★★★★★</div>
+        <blockquote>"As a dental clinic, HIPAA compliance was non-negotiable. TensorLink gave us AI document processing that never touches the internet. Game-changer."</blockquote>
+        <div class="testimonial-author">
+          <div class="testimonial-avatar">JK</div>
+          <div>
+            <div class="testimonial-name">Dr. James K.</div>
+            <div class="testimonial-role">Owner, Shoreline Dental Group</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="testimonial-card">
+        <div class="stars">★★★★★</div>
+        <blockquote>"Xavier and the TensorLink team are the real deal. They speak business, not just tech. Our automation workflows save us 15+ hours a week."</blockquote>
+        <div class="testimonial-author">
+          <div class="testimonial-avatar">AL</div>
+          <div>
+            <div class="testimonial-name">Alex L.</div>
+            <div class="testimonial-role">Founder, Vantage Creative Studio</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="testimonial-card">
+        <div class="stars">★★★★★</div>
+        <blockquote>"The managed IT piece alone is worth it. No more vendor chaos, no more surprise outages. Everything just works, and when something comes up they're already on it."</blockquote>
+        <div class="testimonial-author">
+          <div class="testimonial-avatar">MN</div>
+          <div>
+            <div class="testimonial-name">Maria N.</div>
+            <div class="testimonial-role">Director of IT, Harbor View Properties</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════
+       FAQ
+  ══════════════════════════════════════════════ -->
+  <section id="faq" class="alt-section">
+    <div class="section-label">FAQ</div>
+    <h2 class="section-title">Frequently Asked <span class="gradient-text">Questions</span></h2>
+    <p class="section-sub">Everything you need to know about deploying local AI with TensorLink.</p>
+
+    <div class="faq-grid">
+      <div class="faq-item" id="faq-1">
+        <button class="faq-question" onclick="toggleFaq('faq-1')">
+          What hardware do I need to run local AI?
+          <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="faq-answer">
+          <p>It depends on the models you want to run. A modest workstation with 16–32GB RAM and a mid-range NVIDIA GPU (like an RTX 3060 or 4070) handles most small-to-mid business workloads. We'll assess your existing equipment on our discovery call and recommend the most cost-effective path — often you already have hardware that qualifies.</p>
+        </div>
+      </div>
+
+      <div class="faq-item" id="faq-2">
+        <button class="faq-question" onclick="toggleFaq('faq-2')">
+          How is this different from just using ChatGPT?
+          <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="faq-answer">
+          <p>ChatGPT sends all your data to OpenAI's servers, incurs per-token API costs that compound fast, and gives you no control over the model. With TensorLink, the model runs entirely on your hardware — your data never leaves your building. You pay once (or a flat managed fee), not per query. And we connect the AI to your actual internal knowledge base, documents, and workflows — not just a generic chat interface.</p>
+        </div>
+      </div>
+
+      <div class="faq-item" id="faq-3">
+        <button class="faq-question" onclick="toggleFaq('faq-3')">
+          What is Ollama and why do you use it?
+          <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="faq-answer">
+          <p>Ollama is an open-source platform that makes running LLMs on local hardware as simple as one command. It supports the latest and best open-weight models — LLaMA 3.2, Mistral, Gemma, Qwen, DeepSeek, and more. It exposes an OpenAI-compatible API, which means we can swap models without changing your application code. It's fast, stable, and free.</p>
+        </div>
+      </div>
+
+      <div class="faq-item" id="faq-4">
+        <button class="faq-question" onclick="toggleFaq('faq-4')">
+          What is Tailscale and why does TensorLink use it?
+          <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="faq-answer">
+          <p>Tailscale is a zero-trust VPN built on WireGuard that creates a private, encrypted mesh network between all your devices. We use it so your team can securely access your on-premise AI and tools from anywhere — without opening firewall ports, maintaining a VPN server, or exposing anything to the public internet. It's how we provide remote managed IT support without needing physical access.</p>
+        </div>
+      </div>
+
+      <div class="faq-item" id="faq-5">
+        <button class="faq-question" onclick="toggleFaq('faq-5')">
+          How long does deployment take?
+          <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="faq-answer">
+          <p>A base deployment (local AI + JRVS assistant + secure networking) typically takes 1–3 business days. More complex engagements with full automation pipelines, RAG knowledge bases, and multi-device managed IT take 1–2 weeks. We've never had a deployment stretch beyond 30 days.</p>
+        </div>
+      </div>
+
+      <div class="faq-item" id="faq-6">
+        <button class="faq-question" onclick="toggleFaq('faq-6')">
+          Is my data completely private?
+          <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="faq-answer">
+          <p>Yes — 100%. All AI inference runs locally on your hardware. Your documents, queries, outputs, and business data never leave your network. This is especially important for regulated industries like healthcare (HIPAA), law (attorney-client privilege), and finance. We can provide deployment documentation for your compliance team upon request.</p>
+        </div>
+      </div>
+
+      <div class="faq-item" id="faq-7">
+        <button class="faq-question" onclick="toggleFaq('faq-7')">
+          Do you offer ongoing support?
+          <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="faq-answer">
+          <p>Yes. Our managed IT plans include 24/7 monitoring, proactive patching, helpdesk access, and regular model updates. We treat your stack like it's ours — because when it goes down, so does our reputation. You get a real person (usually within the hour), not a ticket queue.</p>
+        </div>
+      </div>
+
+      <div class="faq-item" id="faq-8">
+        <button class="faq-question" onclick="toggleFaq('faq-8')">
+          What industries do you serve?
+          <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="faq-answer">
+          <p>We work with any business that handles sensitive data or has process bottlenecks that AI can address. We have particular experience in legal services, healthcare practices, real estate, logistics, creative agencies, and local government. If you handle documents, emails, or data-heavy workflows, we can help.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════
+       BLOG
+  ══════════════════════════════════════════════ -->
+  <section id="blog">
+    <div class="section-label">Insights</div>
+    <h2 class="section-title">From the <span class="gradient-text">TensorLink Blog</span></h2>
+    <p class="section-sub">Practical guides on local AI, managed IT, and automation for real businesses.</p>
+
+    <div class="blog-grid">
+      <article class="blog-card blog-card--featured">
+        <div class="blog-category">Local AI</div>
+        <h3 class="blog-title">Why Your Business Should Stop Paying Per-Token and Run AI Locally</h3>
+        <p class="blog-excerpt">OpenAI API bills sneak up fast. A single power user can rack up $500/month before you notice. Here's the math on switching to on-premise models — and why the quality gap is smaller than you think.</p>
+        <div class="blog-meta">
+          <span class="blog-date">July 14, 2026</span>
+          <span class="blog-read">8 min read</span>
+        </div>
+        <a href="#contact" class="blog-link">Read article →</a>
+      </article>
+
+      <article class="blog-card">
+        <div class="blog-category">Automation</div>
+        <h3 class="blog-title">Building a Document Q&A System with RAG and Ollama in Under a Day</h3>
+        <p class="blog-excerpt">Retrieval-Augmented Generation lets your AI answer questions based on your actual company documents — not its training data. Here's how we build it for clients in hours, not weeks.</p>
+        <div class="blog-meta">
+          <span class="blog-date">June 29, 2026</span>
+          <span class="blog-read">12 min read</span>
+        </div>
+        <a href="#contact" class="blog-link">Read article →</a>
+      </article>
+
+      <article class="blog-card">
+        <div class="blog-category">Managed IT</div>
+        <h3 class="blog-title">Tailscale for Small Business: Zero-Trust Networking Without the Enterprise Price Tag</h3>
+        <p class="blog-excerpt">Most businesses think enterprise-grade security requires enterprise budgets. Tailscale proves that wrong. Here's how we use it to lock down client networks and enable remote AI access securely.</p>
+        <div class="blog-meta">
+          <span class="blog-date">June 10, 2026</span>
+          <span class="blog-read">6 min read</span>
+        </div>
+        <a href="#contact" class="blog-link">Read article →</a>
+      </article>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════
+       CTA BANNER
+  ══════════════════════════════════════════════ -->
+  <section id="contact" class="cta-section">
+    <div class="cta-glow"></div>
+    <div class="cta-inner">
+      <div class="section-label">Get Started</div>
+      <h2 class="cta-title">Your AI Stack,<br /><span class="gradient-text">On Your Terms</span></h2>
+      <p class="cta-sub">Book a free 30-minute consultation. We'll map out exactly what's possible for your business — no sales pressure, no jargon.</p>
+
+      <form class="cta-form" id="contactForm" onsubmit="handleFormSubmit(event)">
+        <div class="cta-form-row">
+          <input type="text" id="formName" placeholder="Your name" required autocomplete="name" />
+          <input type="text" id="formBusiness" placeholder="Business name" required />
+        </div>
+        <div class="cta-form-row">
+          <input type="email" id="formEmail" placeholder="Email address" required autocomplete="email" />
+          <input type="tel" id="formPhone" placeholder="Phone (optional)" autocomplete="tel" />
+        </div>
+        <textarea id="formMessage" placeholder="Tell us about your business and what you're hoping AI can help with..." rows="4"></textarea>
+        <button type="submit" class="btn-primary btn-large" id="formSubmitBtn">
+          <span id="formBtnText">Send Message</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </button>
+        <div class="form-note">We typically respond within 4 business hours.</div>
+      </form>
+
+      <div id="formSuccess" class="form-success" style="display:none;">
+        <div class="form-success-icon">✓</div>
+        <h3>Message received!</h3>
+        <p>We'll be in touch within 4 business hours. Check your email for a confirmation.</p>
+      </div>
+
+      <div class="cta-contact-alts">
+        <a href="mailto:hello@tensorlink.tech" class="contact-alt">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          hello@tensorlink.tech
+        </a>
+        <a href="https://calendly.com/tensorlink" target="_blank" rel="noopener" class="contact-alt">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          Book a Time on Calendly
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════
+       FOOTER
+  ══════════════════════════════════════════════ -->
+  <footer>
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <a href="#hero" class="nav-logo footer-logo">Tensor<span>Link</span></a>
+        <p class="footer-tagline">Local AI &amp; Managed IT<br />Long Beach, CA</p>
+        <div class="footer-social">
+          <a href="https://linkedin.com/company/tensorlink" target="_blank" rel="noopener" aria-label="LinkedIn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 016 6v7h-4v-7a2 2 0 00-2-2 2 2 0 00-2 2v7h-4v-7a6 6 0 016-6zM2 9h4v12H2z"/><circle cx="4" cy="4" r="2"/></svg>
+          </a>
+          <a href="https://github.com/tensorlink" target="_blank" rel="noopener" aria-label="GitHub">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22"/></svg>
+          </a>
+          <a href="https://twitter.com/tensorlink" target="_blank" rel="noopener" aria-label="Twitter/X">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+          </a>
+        </div>
+      </div>
+
+      <div class="footer-links-group">
+        <h4>Services</h4>
+        <ul>
+          <li><a href="#features">Local AI Deployment</a></li>
+          <li><a href="#features">Managed IT</a></li>
+          <li><a href="#features">Workflow Automation</a></li>
+          <li><a href="#features">Zero-Trust Networking</a></li>
+          <li><a href="#features">JRVS AI Assistant</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-links-group">
+        <h4>Company</h4>
+        <ul>
+          <li><a href="#how-it-works">How It Works</a></li>
+          <li><a href="#pricing">Pricing</a></li>
+          <li><a href="#testimonials">Reviews</a></li>
+          <li><a href="#blog">Blog</a></li>
+          <li><a href="#contact">Contact</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-links-group">
+        <h4>Resources</h4>
+        <ul>
+          <li><a href="#faq">FAQ</a></li>
+          <li><a href="https://ollama.com" target="_blank" rel="noopener">Ollama</a></li>
+          <li><a href="https://tailscale.com" target="_blank" rel="noopener">Tailscale</a></li>
+          <li><a href="mailto:hello@tensorlink.tech">hello@tensorlink.tech</a></li>
+        </ul>
+      </div>
     </div>
 
-    <!-- Modals -->
-    <div class="modal" id="calendarModal">
-        <div class="modal-content modal-large">
-            <div class="modal-header">
-                <h2>📅 Calendar</h2>
-                <button class="modal-close" onclick="closeModal('calendarModal')">&times;</button>
-            </div>
-            <div class="modal-body" id="calendarContent">
-                Loading calendar...
-            </div>
+    <div class="footer-bottom">
+      <div class="footer-bottom-inner">
+        <span>© 2026 TensorLink. All rights reserved.</span>
+        <div class="footer-legal">
+          <a href="#contact">Privacy Policy</a>
+          <a href="#contact">Terms of Service</a>
         </div>
+        <span class="footer-location">📍 Long Beach, CA</span>
+      </div>
     </div>
+  </footer>
 
-    <div class="modal" id="mcpModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>🔌 MCP Servers</h2>
-                <button class="modal-close" onclick="closeModal('mcpModal')">&times;</button>
-            </div>
-            <div class="modal-body" id="mcpContent">
-                Loading...
-            </div>
-        </div>
-    </div>
-
-    <div class="modal" id="addEventModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>➕ Add Event</h2>
-                <button class="modal-close" onclick="closeModal('addEventModal')">&times;</button>
-            </div>
-            <div class="modal-body">
-                <form id="eventForm" onsubmit="submitEvent(event)">
-                    <div class="form-group">
-                        <label>Event Title</label>
-                        <input type="text" id="eventTitle" required placeholder="Team Meeting">
-                    </div>
-                    <div class="form-group">
-                        <label>Date</label>
-                        <input type="date" id="eventDate" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Time</label>
-                        <input type="time" id="eventTime" required value="14:00">
-                    </div>
-                    <div class="form-group">
-                        <label>Description (optional)</label>
-                        <textarea id="eventDescription" rows="3" placeholder="Meeting details..."></textarea>
-                    </div>
-                    <button type="submit" class="btn-primary">Add Event</button>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <script src="/static/script.js"></script>
+  <script src="/static/script.js"></script>
 </body>
 </html>
