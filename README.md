@@ -400,7 +400,7 @@ await audio.initialize()
 async def jrvs_respond(user_text: str) -> str:
     async with aiohttp.ClientSession() as s:
         resp = await s.post(
-            "http://localhost:8000/api/chat",
+            "http://localhost:8010/api/chat",
             json={"message": user_text, "session_id": "voice"}
         )
         data = await resp.json()
@@ -567,10 +567,10 @@ JRVS implements [UTCP](https://github.com/universal-tool-calling-protocol) — a
 python api/server.py
 
 # Discover available tools
-curl http://localhost:8000/utcp
+curl http://localhost:8010/utcp
 
 # Call a tool directly
-curl -X POST http://localhost:8000/api/chat \
+curl -X POST http://localhost:8010/api/chat \
   -H "Content-Type: application/json" \
   -d '{"message": "Hello JRVS!"}'
 ```

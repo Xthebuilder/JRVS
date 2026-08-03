@@ -4,11 +4,16 @@
 
 cd "$(dirname "$0")"
 
+# JRVS_SERVER_PORT (default 8000) is read from .env so this script can never
+# drift out of sync with what api/server.py actually binds to.
+PORT="$(grep -oP '^JRVS_SERVER_PORT=\K.*' .env 2>/dev/null || true)"
+PORT="${PORT:-8000}"
+
 # ── Kill any existing JARVIS processes ──────────────────────────────────────
 pkill -f "python voice.py" 2>/dev/null
-if fuser 8000/tcp &>/dev/null; then
-    echo "Stopping existing server on port 8000..."
-    fuser -k 8000/tcp &>/dev/null
+if fuser "$PORT"/tcp &>/dev/null; then
+    echo "Stopping existing server on port $PORT..."
+    fuser -k "$PORT"/tcp &>/dev/null
     sleep 1
 fi
 
@@ -19,7 +24,7 @@ SERVER_PID=$!
 
 # ── Wait until the server is healthy (up to 20 s) ──────────────────────────
 for i in $(seq 1 20); do
-    if curl -sf http://localhost:8000/health &>/dev/null; then
+    if curl -sf http://localhost:"$PORT"/health &>/dev/null; then
         echo "Server ready."
         break
     fi
@@ -30,7 +35,7 @@ for i in $(seq 1 20); do
     sleep 1
 done
 
-if ! curl -sf http://localhost:8000/health &>/dev/null; then
+if ! curl -sf http://localhost:"$PORT"/health &>/dev/null; then
     echo "Server didn't start in time. Check /tmp/jrvs_server.log"
     exit 1
 fi

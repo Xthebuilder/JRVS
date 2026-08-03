@@ -28,6 +28,8 @@ from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 import subprocess
 
+import anyio
+
 try:
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
@@ -355,15 +357,19 @@ class MCPClient:
 
         Puppeteer (and other browser servers) can hold open a Chromium process
         that takes a long time to close. The timeout prevents a hang on exit.
+
+        Uses anyio.fail_after rather than asyncio.wait_for: wait_for schedules
+        the awaited coroutine as a separate asyncio Task, which breaks the
+        task affinity anyio's cancel scopes require and raises "Attempted to
+        exit cancel scope in a different task than it was entered in".
+        fail_after enforces the same timeout without leaving this task.
         """
         if server_name in self.connections:
             connection = self.connections[server_name]
             try:
-                await asyncio.wait_for(
-                    connection.__aexit__(None, None, None),
-                    timeout=timeout,
-                )
-            except (Exception, asyncio.CancelledError, asyncio.TimeoutError):
+                with anyio.fail_after(timeout):
+                    await connection.__aexit__(None, None, None)
+            except (Exception, asyncio.CancelledError, TimeoutError):
                 pass
             finally:
                 del self.connections[server_name]

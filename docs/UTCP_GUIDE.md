@@ -37,7 +37,7 @@ Or use the start script:
 Access the UTCP manual endpoint:
 
 ```bash
-curl http://localhost:8000/utcp
+curl http://localhost:8010/utcp
 ```
 
 This returns a JSON document describing all available JRVS tools:
@@ -57,7 +57,7 @@ This returns a JSON document describing all available JRVS tools:
       "description": "Send a message to the JRVS AI assistant...",
       "tool_call_template": {
         "call_template_type": "http",
-        "url": "http://localhost:8000/api/chat",
+        "url": "http://localhost:8010/api/chat",
         "http_method": "POST"
       }
     }
@@ -72,15 +72,15 @@ With UTCP, AI agents can call JRVS tools directly using the information from the
 
 ```bash
 # Example: Chat with JRVS
-curl -X POST http://localhost:8000/api/chat \
+curl -X POST http://localhost:8010/api/chat \
   -H "Content-Type: application/json" \
   -d '{"message": "What is machine learning?"}'
 
 # Example: Search the knowledge base
-curl "http://localhost:8000/api/search?query=python+tutorials&limit=5"
+curl "http://localhost:8010/api/search?query=python+tutorials&limit=5"
 
 # Example: Create a calendar event
-curl -X POST http://localhost:8000/api/calendar/events \
+curl -X POST http://localhost:8010/api/calendar/events \
   -H "Content-Type: application/json" \
   -d '{"title": "Team Meeting", "event_date": "2025-11-15T14:30:00"}'
 ```
@@ -158,7 +158,7 @@ import json
 
 # 1. Discover tools
 async with httpx.AsyncClient() as client:
-    response = await client.get("http://localhost:8000/utcp")
+    response = await client.get("http://localhost:8010/utcp")
     manual = response.json()
 
 # 2. Find a tool
@@ -187,7 +187,7 @@ client = UTCPClient({
     "manual_call_templates": [{
         "name": "jrvs",
         "call_template_type": "http",
-        "url": "http://localhost:8000/utcp",
+        "url": "http://localhost:8010/utcp",
         "http_method": "GET"
     }]
 })
@@ -217,7 +217,7 @@ If you're using Tailscale for remote access:
 
 ```bash
 # Access via Tailscale hostname
-curl http://your-machine.tail12345.ts.net:8000/utcp
+curl http://your-machine.tail12345.ts.net:8010/utcp
 ```
 
 ## Security
@@ -250,12 +250,12 @@ async def verify_api_key(api_key: str = Security(api_key_header)):
 
 1. Ensure the API server is running:
    ```bash
-   curl http://localhost:8000/health
+   curl http://localhost:8010/health
    ```
 
 2. Check if the port is available:
    ```bash
-   lsof -i :8000
+   lsof -i :8010
    ```
 
 ### Tools not working

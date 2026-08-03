@@ -10,6 +10,11 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# JRVS_SERVER_PORT (default 8000) is read from .env so this script can never
+# drift out of sync with what api/server.py actually binds to.
+PORT="$(grep -oP '^JRVS_SERVER_PORT=\K.*' .env 2>/dev/null || true)"
+PORT="${PORT:-8000}"
+
 VOICE_MODE=false
 API_ONLY=false
 PASSTHROUGH_ARGS=()
@@ -40,13 +45,13 @@ if ! command -v node &> /dev/null; then
 fi
 
 _start_api_and_voice() {
-    echo "Starting API server on :8000 ..."
+    echo "Starting API server on :$PORT ..."
     python api/server.py &
     API_PID=$!
 
     echo "Waiting for API server to be ready..."
     for i in $(seq 1 20); do
-        if curl -sf http://localhost:8000/health > /dev/null 2>&1; then
+        if curl -sf http://localhost:"$PORT"/health > /dev/null 2>&1; then
             echo "API server is ready."
             break
         fi
@@ -70,7 +75,7 @@ if $VOICE_MODE; then
     wait "$VOICE_PID"
 
 elif $API_ONLY; then
-    echo "Starting API server only on :8000 ..."
+    echo "Starting API server only on :$PORT ..."
     python api/server.py
 
 else

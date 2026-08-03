@@ -18,5 +18,7 @@ if ! python -c "import fastapi" 2>/dev/null; then
 fi
 
 # Start the API server
-echo "✅ Starting API on http://localhost:8000"
+PORT="$(grep -oP '^JRVS_SERVER_PORT=\K.*' .env 2>/dev/null || true)"
+PORT="${PORT:-8000}"
+echo "✅ Starting API on http://localhost:$PORT"
 python api/server.py

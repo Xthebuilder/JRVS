@@ -19,7 +19,7 @@ python api/server.py
 You should see:
 ```
 INFO:     Started server process
-INFO:     Uvicorn running on http://0.0.0.0:8000
+INFO:     Uvicorn running on http://0.0.0.0:8010
 ```
 
 ### **Step 3: Start Next.js Frontend**
@@ -77,7 +77,7 @@ Open: **http://localhost:3000**
 3. **Configure Environment:**
    Already created `.env.local`:
    ```env
-   NEXT_PUBLIC_API_URL=http://localhost:8000/api
+   NEXT_PUBLIC_API_URL=http://localhost:8010/api
    ```
 
 4. **Start Dev Server:**
@@ -87,7 +87,7 @@ Open: **http://localhost:3000**
 
 5. **Access:**
    - App: http://localhost:3000
-   - API Docs: http://localhost:8000/docs
+   - API Docs: http://localhost:8010/docs
 
 **Pros:**
 - Modern UI (Tailwind CSS)
@@ -107,7 +107,7 @@ Open: **http://localhost:3000**
 2. **Access:**
    - Jarvis CLI: `docker exec -it jarvis_ai_agent python main.py`
    - Ollama: http://localhost:11434
-   - API: http://localhost:8000
+   - API: http://localhost:8010
 
 ---
 
@@ -116,7 +116,7 @@ Open: **http://localhost:3000**
 ### **Chat**
 ```bash
 # Simple chat
-curl -X POST http://localhost:8000/api/chat \
+curl -X POST http://localhost:8010/api/chat \
   -H "Content-Type: application/json" \
   -d '{"message": "Hello Jarvis"}'
 
@@ -131,19 +131,19 @@ curl -X POST http://localhost:8000/api/chat \
 ### **Models**
 ```bash
 # List models
-curl http://localhost:8000/api/models
+curl http://localhost:8010/api/models
 
 # Switch model
-curl -X POST http://localhost:8000/api/models/switch/deepseek-r1:14b
+curl -X POST http://localhost:8010/api/models/switch/deepseek-r1:14b
 ```
 
 ### **Calendar**
 ```bash
 # Get upcoming events
-curl http://localhost:8000/api/calendar/events?days=7
+curl http://localhost:8010/api/calendar/events?days=7
 
 # Create event
-curl -X POST http://localhost:8000/api/calendar/events \
+curl -X POST http://localhost:8010/api/calendar/events \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Team Meeting",
@@ -152,18 +152,18 @@ curl -X POST http://localhost:8000/api/calendar/events \
   }'
 
 # Complete event
-curl -X POST http://localhost:8000/api/calendar/events/1/complete
+curl -X POST http://localhost:8010/api/calendar/events/1/complete
 ```
 
 ### **Knowledge Base**
 ```bash
 # Scrape website
-curl -X POST http://localhost:8000/api/scrape \
+curl -X POST http://localhost:8010/api/scrape \
   -H "Content-Type: application/json" \
   -d '{"url": "https://docs.react.dev"}'
 
 # Search documents
-curl "http://localhost:8000/api/search?query=react%20hooks&limit=5"
+curl "http://localhost:8010/api/search?query=react%20hooks&limit=5"
 ```
 
 ---
@@ -172,7 +172,7 @@ curl "http://localhost:8000/api/search?query=react%20hooks&limit=5"
 
 ### **Test 1: Chat Works**
 ```bash
-curl -X POST http://localhost:8000/api/chat \
+curl -X POST http://localhost:8010/api/chat \
   -H "Content-Type: application/json" \
   -d '{"message": "What is 2+2?"}'
 ```
@@ -215,8 +215,8 @@ Expected: JSON response with answer
 # Make sure API is running
 python api/server.py
 
-# Check if port 8000 is in use
-lsof -i :8000
+# Check if port 8010 is in use
+lsof -i :8010
 ```
 
 ### **"Ollama not running":**
@@ -274,7 +274,7 @@ User Browser
     ↓
 Next.js Frontend (localhost:3000)
     ↓ HTTP/REST
-FastAPI Backend (localhost:8000)
+FastAPI Backend (localhost:8010)
     ↓
 ├─ Ollama API (localhost:11434) → AI Responses
 ├─ SQLite Database → Conversations, Events
@@ -301,7 +301,7 @@ FastAPI Backend (localhost:8000)
 ## ✅ You're Done!
 
 You now have:
-✅ Jarvis backend running on port 8000
+✅ Jarvis backend running on port 8010
 ✅ Next.js frontend on port 3000
 ✅ Full API integration
 ✅ Calendar, chat, and RAG features

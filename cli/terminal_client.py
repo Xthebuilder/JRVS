@@ -31,6 +31,18 @@ from config import JRVS_SERVER_HOST, JRVS_SERVER_PORT
 DAEMON_URL = os.environ.get("JRVS_DAEMON_URL", f"http://{JRVS_SERVER_HOST}:{JRVS_SERVER_PORT}")
 SESSION_ID = str(uuid.uuid4())
 
+# Commands this thin client knows how to send. "/help" is handled locally
+# (see main()) rather than being forwarded — forwarding it used to send the
+# literal string "/help" to the LLM chat pipeline, which isn't a real command
+# there and made the model improvise a fake back-and-forth instead of answering.
+_HELP_COMMANDS = {
+    "/help": "Show this help message",
+    "/exit, /quit, /q": "Exit JARVIS",
+    "/google-auth": "Authenticate with Google (OAuth2)",
+    "<anything else>": "Chat normally — JARVIS handles calendar, search, "
+                        "email, and other requests in plain language",
+}
+
 
 async def _wait_for_daemon(timeout: int = 30) -> bool:
     """Wait until the daemon's API is ready."""
@@ -167,6 +179,12 @@ async def main() -> None:
 
             if text.lower() in ("/exit", "/quit", "/q"):
                 break
+
+            # Handle /help locally — don't forward it, the daemon has no such
+            # command and would otherwise hand the literal text to the LLM.
+            if text.lower() == "/help":
+                theme.print_help(_HELP_COMMANDS)
+                continue
 
             # Handle /google-auth interactively — needs URL + code input
             if text.lower() == "/google-auth":

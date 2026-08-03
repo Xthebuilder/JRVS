@@ -13,7 +13,7 @@ cd /path/to/JRVS
 python api/server.py
 ```
 
-Server runs at: `http://localhost:8000`
+Server runs at: `http://localhost:8010`
 
 ### 3. Open Frontend Example
 ```bash
@@ -47,7 +47,7 @@ Response:
 
 ### WebSocket Streaming
 ```javascript
-const ws = new WebSocket('ws://localhost:8000/ws/chat');
+const ws = new WebSocket('ws://localhost:8010/ws/chat');
 ws.send(JSON.stringify({ message: "Hello" }));
 ws.onmessage = (event) => {
   const data = JSON.parse(event.data);
@@ -112,7 +112,7 @@ function JarvisChat() {
   const [input, setInput] = useState('');
 
   const sendMessage = async () => {
-    const response = await fetch('http://localhost:8000/api/chat', {
+    const response = await fetch('http://localhost:8010/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: input })
@@ -161,7 +161,7 @@ export default {
   },
   methods: {
     async sendMessage() {
-      const res = await fetch('http://localhost:8000/api/chat', {
+      const res = await fetch('http://localhost:8010/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: this.input })
@@ -186,7 +186,7 @@ export default {
   let input = '';
 
   async function sendMessage() {
-    const res = await fetch('http://localhost:8000/api/chat', {
+    const res = await fetch('http://localhost:8010/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: input })
@@ -245,7 +245,7 @@ services:
     build: .
     command: python api/server.py
     ports:
-      - "8000:8000"
+      - "8010:8010"
 
   frontend:
     image: nginx:alpine
@@ -269,7 +269,7 @@ import 'dart:convert';
 
 Future<String> chat(String message) async {
   final response = await http.post(
-    Uri.parse('http://localhost:8000/api/chat'),
+    Uri.parse('http://localhost:8010/api/chat'),
     headers: {'Content-Type': 'application/json'},
     body: json.encode({'message': message}),
   );

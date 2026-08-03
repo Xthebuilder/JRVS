@@ -364,7 +364,10 @@ async def chat_full(request: ChatRequest, req: Request):
         if not cli._system_prompt:
             raise HTTPException(status_code=503, detail="CLI not initialized yet — daemon still starting")
 
-        response = await cli.handle_chat_message_for_slack(request.message, session_id)
+        # label_source=False: this endpoint serves the terminal client (and any other
+        # non-Slack caller), where the "From what I know from memory, ..." Slack-only
+        # prefix reads as stilted filler rather than useful context.
+        response = await cli.handle_chat_message_for_slack(request.message, session_id, label_source=False)
         return ChatResponse(
             response=response,
             session_id=session_id,

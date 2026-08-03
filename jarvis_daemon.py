@@ -78,7 +78,13 @@ async def _supervise(name: str, coro_factory, *, max_backoff: int = 120):
         except asyncio.CancelledError:
             log.info("supervisor: %s cancelled", name)
             return
-        except Exception as exc:
+        except (Exception, SystemExit) as exc:
+            # SystemExit is caught too: uvicorn calls sys.exit(1) directly on
+            # a bind failure instead of raising a normal Exception. Left
+            # uncaught, that propagates out of asyncio.run(main()) entirely,
+            # which force-closes every other MCP stdio connection from the
+            # wrong asyncio task during interpreter shutdown — the actual
+            # source of the "cancel scope in a different task" errors.
             log.error(
                 "supervisor: %s crashed (%s) — restarting in %ds…",
                 name, exc, delay,

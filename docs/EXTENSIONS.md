@@ -282,7 +282,7 @@ await audio.speak("I found three items in your calendar today.")
 async def jrvs_respond(user_text: str) -> str:
     # plug in your JRVS API call here
     async with aiohttp.ClientSession() as s:
-        r = await s.post("http://localhost:8000/api/chat",
+        r = await s.post("http://localhost:8010/api/chat",
                          json={"message": user_text, "session_id": "voice"})
         return (await r.json())["response"]
 
