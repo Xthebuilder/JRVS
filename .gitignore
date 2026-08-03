@@ -27,6 +27,30 @@ data/google_token.json
 data/*.json
 .google_code_verifier
 
+# Generic secret/credential safety net — catches keys, tokens, and
+# credential files regardless of which integration introduces them
+# (e.g. Nextcloud app passwords, future API integrations), so nothing
+# needs to be added here per-integration to stay safe by default.
+*credentials*.json
+*credentials*.yaml
+*credentials*.yml
+*_secret*
+*secrets*.json
+*secrets*.yaml
+*secrets*.yml
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+.netrc
+.aws/
+.ssh/
+*.jwt
+*_token
+*_token.txt
+
 # Data / generated
 data/mcp_logs/
 *.db
