@@ -31,6 +31,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable, Awaitable, Optional
 
+from agent.approvals import ApprovalCoordinator
+from agent.scheduling import next_ready_batch
 from agent.tool_registry import tool_registry, CONFIRM, NOTIFY, AUTO, BLOCKED, max_tier
 from llm.protocol import LLMBackend
 
@@ -112,6 +114,10 @@ class AgentLoop:
         self,
         db,
         slack_send_approval: Optional[Callable[..., Awaitable[dict]]] = None,
+        role: str = "general",
+        allowed_tools: Optional["set[str]"] = None,
+        approvals: Optional[ApprovalCoordinator] = None,
+        max_retries: int = MAX_RETRIES,
     ) -> None:
         """
         Parameters
@@ -122,13 +128,30 @@ class AgentLoop:
             Async callable that posts a Slack approval request and returns
             {"ts": ..., "channel": ...}. If None, CONFIRM steps are skipped
             with a warning.
+        role
+            Name of this engine's role, used for logging/tracing when several
+            AgentLoop instances run as role-scoped sub-agents under a LeadAgent
+            (agent/lead.py). Defaults to "general" for standalone/flat usage.
+        allowed_tools
+            If given, restricts planning and execution to this subset of
+            registered tool names (a role's scope). None means every
+            registered tool is available, preserving today's flat behaviour.
+        approvals
+            Shared ApprovalCoordinator to route CONFIRM-tier approvals
+            through. If None, a private one is constructed so AgentLoop
+            remains usable standalone.
+        max_retries
+            Replan budget for this engine. Defaults to MAX_RETRIES so
+            standalone/flat usage is unchanged; role engines under a
+            LeadAgent are typically given a smaller budget to bound total
+            lead+role retry cost.
         """
         self._db = db
         self._slack_send_approval = slack_send_approval
-
-        # Map of goal_id -> asyncio.Event for approval/denial signals
-        self._approval_events: dict[str, asyncio.Event] = {}
-        self._approval_results: dict[str, str] = {}  # action_id -> "approved"|"denied"
+        self._role = role
+        self._allowed_tools = allowed_tools
+        self._max_retries = max_retries
+        self._approvals = approvals or ApprovalCoordinator(db)
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -145,7 +168,7 @@ class AgentLoop:
         be an LLMRouter so that routing happens transparently.
         """
         run_id = str(uuid.uuid4())
-        log.info("AgentLoop: starting goal '%s' run=%s", goal_id, run_id[:8])
+        log.info("AgentLoop[%s]: starting goal '%s' run=%s", self._role, goal_id, run_id[:8])
 
         await self._db.upsert_goal_state(goal_id, {
             "status": "planning",
@@ -177,7 +200,7 @@ class AgentLoop:
 
         if result.status == "completed":
             await self._db.upsert_goal_state(goal_id, {"status": "completed"})
-            log.info("AgentLoop: goal '%s' completed (%d steps)", goal_id, result.steps_ok)
+            log.info("AgentLoop[%s]: goal '%s' completed (%d steps)", self._role, goal_id, result.steps_ok)
         elif result.status != "awaiting_approval":
             await self._mark_failed(goal_id, result.error)
 
@@ -186,18 +209,11 @@ class AgentLoop:
     async def handle_approval(self, action_id: str, approved: bool) -> None:
         """
         Called by SlackListener when the user taps Approve or Deny.
-        Signals the waiting execute step to proceed or abort.
+        Thin passthrough to the shared ApprovalCoordinator — kept here so
+        code holding a bare AgentLoop reference (standalone/flat usage)
+        doesn't need to know about ApprovalCoordinator directly.
         """
-        verdict = "approved" if approved else "denied"
-        self._approval_results[action_id] = verdict
-        await self._db.update_approval_status(action_id, verdict)
-
-        event = self._approval_events.get(action_id)
-        if event:
-            event.set()
-            log.info("AgentLoop: approval signal received for %s: %s", action_id[:8], verdict)
-        else:
-            log.warning("AgentLoop: no waiting event for action_id=%s", action_id[:8])
+        await self._approvals.handle_approval(action_id, approved)
 
     # ── Planning ──────────────────────────────────────────────────────────────
 
@@ -210,13 +226,20 @@ class AgentLoop:
             return {"gmail_", "docs_", "sheets_", "calendar_"}
         return set()
 
+    def _effective_exclude_prefixes(self) -> "set[str]":
+        """Merge credential-based exclusion with this engine's role scope, if any."""
+        exclude = set(self._unavailable_tool_prefixes())
+        if self._allowed_tools is not None:
+            exclude |= (tool_registry.names() - self._allowed_tools)
+        return exclude
+
     async def _plan(
         self,
         goal_text: str,
         goal_id: str,
         backend: LLMBackend,
     ) -> list[StepSpec]:
-        exclude = self._unavailable_tool_prefixes()
+        exclude = self._effective_exclude_prefixes()
         catalogue = tool_registry.catalogue_for_prompt(exclude=exclude or None)
 
         # Load prior memory for this goal (context from previous runs)
@@ -242,7 +265,7 @@ class AgentLoop:
             {"role": "system", "content": system},
             {"role": "user",   "content": user_msg},
         ])
-        return _parse_plan(raw)
+        return _parse_plan(raw, allowed_names=self._allowed_tools)
 
     async def _replan(
         self,
@@ -253,7 +276,7 @@ class AgentLoop:
         backend: LLMBackend,
     ) -> list[StepSpec]:
         """Ask the LLM to recover from a failed step."""
-        exclude = self._unavailable_tool_prefixes()
+        exclude = self._effective_exclude_prefixes()
         catalogue = tool_registry.catalogue_for_prompt(exclude=exclude or None)
         remaining_json = json.dumps([_step_to_dict(s) for s in remaining], indent=2)
         system = _PLANNER_SYSTEM.format(catalogue=catalogue)
@@ -269,7 +292,7 @@ class AgentLoop:
                 {"role": "system", "content": system},
                 {"role": "user",   "content": user_msg},
             ])
-            return _parse_plan(raw)
+            return _parse_plan(raw, allowed_names=self._allowed_tools)
         except Exception as exc:
             log.error("AgentLoop: replan failed: %s — using original remaining steps", exc)
             return remaining
@@ -295,18 +318,16 @@ class AgentLoop:
         retry_count = 0
 
         while remaining:
-            # Find steps whose dependencies are all satisfied
-            ready = [
-                s for s in remaining
-                if all(dep in step_results for dep in s.depends_on)
-            ]
-            if not ready:
+            # Find the next batch of steps whose dependencies are satisfied
+            batch = next_ready_batch(
+                remaining, deps_fn=lambda s: s.depends_on,
+                done_keys=step_results, max_parallel=MAX_PARALLEL,
+            )
+            if batch is None:
                 # Dependency deadlock — shouldn't happen with valid plans
-                log.error("AgentLoop: dependency deadlock for goal '%s'", goal_id)
+                log.error("AgentLoop[%s]: dependency deadlock for goal '%s'", self._role, goal_id)
                 break
 
-            # Execute up to MAX_PARALLEL ready steps concurrently
-            batch = ready[:MAX_PARALLEL]
             tasks = [
                 self._execute_step(s, goal_id, run_id, step_results)
                 for s in batch
@@ -339,14 +360,14 @@ class AgentLoop:
                     err = outcome.get("error", "unknown error")
                     steps_failed += 1
                     log.warning(
-                        "AgentLoop: step %d (%s) failed: %s — replanning (attempt %d/%d)",
-                        step.step, step.tool, err, retry_count + 1, MAX_RETRIES,
+                        "AgentLoop[%s]: step %d (%s) failed: %s — replanning (attempt %d/%d)",
+                        self._role, step.step, step.tool, err, retry_count + 1, self._max_retries,
                     )
                     retry_count += 1
 
-                    if retry_count >= MAX_RETRIES:
+                    if retry_count >= self._max_retries:
                         msg = (
-                            f":x: *Goal `{goal_id}` permanently failed* after {MAX_RETRIES} retries.\n"
+                            f":x: *Goal `{goal_id}` permanently failed* after {self._max_retries} retries.\n"
                             f"Last error on step {step.step} ({step.tool}): `{err}`"
                         )
                         await _notify_slack(msg, channel_key="alerts")
@@ -384,6 +405,16 @@ class AgentLoop:
         # Resolve placeholder args from earlier step results
         args = _resolve_args(step.args, step_results)
         tier = step.tier
+
+        # Defense-in-depth: a role-scoped engine's plan should already be
+        # limited to its allowed tools (via _parse_plan's allowed_names), but
+        # don't rely solely on the planner behaving — re-check before execution.
+        if self._allowed_tools is not None and step.tool not in self._allowed_tools:
+            log.warning(
+                "AgentLoop[%s]: step %d tool '%s' is outside role scope — rejecting",
+                self._role, step.step, step.tool,
+            )
+            return {"status": "error", "error": f"tool '{step.tool}' outside role scope"}
 
         if tier == BLOCKED:
             log.warning("AgentLoop: step %d (%s) is BLOCKED — skipping", step.step, step.tool)
@@ -449,19 +480,14 @@ class AgentLoop:
 
         await self._db.save_pending_approval(approval_row)
 
-        # Wait for Slack button response (up to 24 hours)
-        event = asyncio.Event()
-        self._approval_events[action_id] = event
-        try:
-            await asyncio.wait_for(event.wait(), timeout=86400)
-        except asyncio.TimeoutError:
-            log.warning("AgentLoop: approval timed out for action_id=%s", action_id[:8])
-            self._approval_events.pop(action_id, None)
+        # Wait for Slack button response (up to 24 hours), via the shared
+        # ApprovalCoordinator so this resolves regardless of which role
+        # engine (or the lead) is holding the waiting coroutine.
+        verdict = await self._approvals.wait_for_approval(action_id, timeout=86400)
+        if verdict == "timeout":
+            log.warning("AgentLoop[%s]: approval timed out for action_id=%s", self._role, action_id[:8])
             return {"status": "error", "error": "Approval timed out after 24h"}
-        finally:
-            self._approval_events.pop(action_id, None)
 
-        verdict = self._approval_results.pop(action_id, "denied")
         if verdict != "approved":
             log.info("AgentLoop: action %s denied by user", action_id[:8])
             return {"status": "error", "error": "Denied by user"}
@@ -541,8 +567,14 @@ class AgentLoop:
 
 # ── Module-level helpers ──────────────────────────────────────────────────────
 
-def _parse_plan(raw: str) -> list[StepSpec]:
-    """Parse LLM output into a list of StepSpec, validating each step."""
+def _parse_plan(raw: str, allowed_names: "Optional[set[str]]" = None) -> list[StepSpec]:
+    """Parse LLM output into a list of StepSpec, validating each step.
+
+    allowed_names, when given, restricts which tool names are accepted —
+    used by role-scoped engines so an out-of-role tool the LLM hallucinates
+    (or is prompt-injected into emitting) is rejected at parse time, on top
+    of the prompt already hiding it via the catalogue's exclude set.
+    """
     text = raw.strip() if raw else ""
     # Strip markdown code fences if present
     text = re.sub(r"```[^\n]*\n?|```", "", text).strip()
@@ -562,7 +594,7 @@ def _parse_plan(raw: str) -> list[StepSpec]:
         return []
 
     steps = []
-    known_names = tool_registry.names()
+    known_names = allowed_names if allowed_names is not None else tool_registry.names()
     for i, raw_step in enumerate(data[:10]):
         if not isinstance(raw_step, dict):
             continue
@@ -639,7 +671,7 @@ async def _notify_slack(text: str, channel_key: Optional[str] = None) -> None:
 _agent_loop: Optional[AgentLoop] = None
 
 
-def get_agent_loop() -> Optional[AgentLoop]:
+def get_agent_loop():
     return _agent_loop
 
 
@@ -647,3 +679,15 @@ def init_agent_loop(db, slack_send_approval=None) -> AgentLoop:
     global _agent_loop
     _agent_loop = AgentLoop(db=db, slack_send_approval=slack_send_approval)
     return _agent_loop
+
+
+def set_agent_loop(instance) -> None:
+    """
+    Install a pre-built orchestrator (e.g. a LeadAgent from agent/lead.py) as
+    the process-wide singleton returned by get_agent_loop(). Lets callers that
+    only need run_goal()/handle_approval() — core/goal_scheduler.py,
+    agent/triggers.py, cli/interface.py's Slack goal path — stay unchanged
+    regardless of whether a flat AgentLoop or a LeadAgent is running the show.
+    """
+    global _agent_loop
+    _agent_loop = instance

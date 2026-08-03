@@ -234,12 +234,12 @@ class SlackListener:
 
         if not routed:
             try:
-                from agent.loop import get_agent_loop
-                loop = get_agent_loop()
-                if loop:
-                    await loop.handle_approval(value, approved)
+                from agent.approvals import get_approval_coordinator
+                coordinator = get_approval_coordinator()
+                if coordinator:
+                    await coordinator.handle_approval(value, approved)
                 else:
-                    log.warning("SlackListener: AgentLoop not initialised — cannot process approval")
+                    log.warning("SlackListener: ApprovalCoordinator not initialised — cannot process approval")
             except Exception as exc:
                 log.error("SlackListener: error processing approval: %s", exc)
                 return

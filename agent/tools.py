@@ -137,6 +137,29 @@ async def calendar_find(query: str, max_results: int = 10) -> list:
     return await _run_sync(client.find_events, query=query, max_results=max_results)
 
 
+# ── Nextcloud CalDAV (AUTO reads) ─────────────────────────────────────────────
+
+@jarvis_tool(name="nextcloud_list_calendars", tier=AUTO, desc="List all Nextcloud calendars")
+async def nextcloud_list_calendars() -> list:
+    from jrvs.nextcloud.caldav_client import CalDAVClient
+    client = CalDAVClient()
+    return await _run_sync(client.list_calendars)
+
+
+@jarvis_tool(name="nextcloud_events", tier=AUTO, desc="List upcoming Nextcloud calendar events")
+async def nextcloud_events(max_results: int = 20, calendar_name: str = "") -> list:
+    from jrvs.nextcloud.caldav_client import CalDAVClient
+    client = CalDAVClient()
+    return await _run_sync(client.list_events, max_results=max_results, calendar_name=calendar_name or None)
+
+
+@jarvis_tool(name="nextcloud_find", tier=AUTO, desc="Search Nextcloud calendar events by keyword")
+async def nextcloud_find(query: str, max_results: int = 10) -> list:
+    from jrvs.nextcloud.caldav_client import CalDAVClient
+    client = CalDAVClient()
+    return await _run_sync(client.find_events, query=query, max_results=max_results)
+
+
 # ── Web search (AUTO) ─────────────────────────────────────────────────────────
 
 @jarvis_tool(name="web_search", tier=AUTO, desc="Search the web using Brave Search")
@@ -310,6 +333,34 @@ async def calendar_update(event_id: str, calendar_id: str = "primary", **fields)
     return await _run_sync(client.update_event, event_id=event_id, calendar_id=calendar_id, **fields)
 
 
+# ── Nextcloud CalDAV (NOTIFY writes) ──────────────────────────────────────────
+
+@jarvis_tool(name="nextcloud_create", tier=NOTIFY, desc="Create a Nextcloud calendar event")
+async def nextcloud_create(
+    summary: str,
+    start: str,
+    end: str,
+    description: str = "",
+    location: str = "",
+    calendar_name: str = "",
+) -> dict:
+    from jrvs.nextcloud.caldav_client import CalDAVClient
+    client = CalDAVClient()
+    return await _run_sync(
+        client.create_event,
+        summary=summary, start=start, end=end,
+        description=description, location=location,
+        calendar_name=calendar_name or None,
+    )
+
+
+@jarvis_tool(name="nextcloud_update", tier=NOTIFY, desc="Update an existing Nextcloud calendar event")
+async def nextcloud_update(event_id: str, calendar_name: str = "", **fields) -> dict:
+    from jrvs.nextcloud.caldav_client import CalDAVClient
+    client = CalDAVClient()
+    return await _run_sync(client.update_event, event_id=event_id, calendar_name=calendar_name or None, **fields)
+
+
 # ── Gmail (CONFIRM sends) ─────────────────────────────────────────────────────
 
 @jarvis_tool(name="gmail_send", tier=CONFIRM, desc="Send an email")
@@ -333,6 +384,15 @@ async def calendar_delete(event_id: str, calendar_id: str = "primary") -> dict:
     from jrvs.google.calendar_client import CalendarClient
     client = CalendarClient()
     return await _run_sync(client.delete_event, event_id=event_id, calendar_id=calendar_id)
+
+
+# ── Nextcloud CalDAV (CONFIRM delete) ─────────────────────────────────────────
+
+@jarvis_tool(name="nextcloud_delete", tier=CONFIRM, desc="Permanently delete a Nextcloud calendar event")
+async def nextcloud_delete(event_id: str, calendar_name: str = "") -> dict:
+    from jrvs.nextcloud.caldav_client import CalDAVClient
+    client = CalDAVClient()
+    return await _run_sync(client.delete_event, event_id=event_id, calendar_name=calendar_name or None)
 
 
 # ── Marketing (NOTIFY generate / AUTO list) ───────────────────────────────────
@@ -410,3 +470,73 @@ async def image_gen_generate(
 async def image_gen_list(status: str = "", limit: int = 10) -> list:
     from image_gen_module import image_gen_module
     return await image_gen_module.list_jobs(status=status or None, limit=limit)
+
+
+# ── Coder / JARCORE (AUTO reads) ───────────────────────────────────────────────
+# Thin wrappers around mcp_gateway.coding_agent.jarcore so the "coder" role
+# (agent/roles.py) can be planned/executed through the same tool_registry
+# machinery as every other role. Note: jarcore uses its own injected LLM
+# client (jarcore.set_llm_client, wired once at startup in cli/interface.py)
+# rather than the `backend`/LLMRouter passed into the owning AgentLoop — a
+# pre-existing JARCORE constraint, not something these wrappers change.
+
+@jarvis_tool(name="code_analyze", tier=AUTO, desc="Analyse code for issues, style, and best practices")
+async def code_analyze(code: str, language: str = "python", analysis_type: str = "comprehensive") -> dict:
+    from mcp_gateway.coding_agent import jarcore
+    return await jarcore.analyze_code(code=code, language=language, analysis_type=analysis_type)
+
+
+@jarvis_tool(name="code_explain", tier=AUTO, desc="Explain what a piece of code does")
+async def code_explain(code: str, language: str = "python", detail_level: str = "medium") -> str:
+    from mcp_gateway.coding_agent import jarcore
+    return await jarcore.explain_code(code=code, language=language, detail_level=detail_level)
+
+
+# ── Coder / JARCORE (NOTIFY writes) ────────────────────────────────────────────
+
+@jarvis_tool(name="code_generate", tier=NOTIFY, desc="Generate code from a natural-language task description")
+async def code_generate(
+    task: str,
+    language: str = "python",
+    context: str = "",
+    include_tests: bool = False,
+) -> dict:
+    from mcp_gateway.coding_agent import jarcore
+    return await jarcore.generate_code(
+        task=task, language=language,
+        context=context or None, include_tests=include_tests,
+    )
+
+
+@jarvis_tool(name="code_refactor", tier=NOTIFY, desc="Refactor code toward a stated goal")
+async def code_refactor(
+    code: str,
+    language: str = "python",
+    refactor_goal: str = "improve readability and maintainability",
+) -> dict:
+    from mcp_gateway.coding_agent import jarcore
+    return await jarcore.refactor_code(code=code, language=language, refactor_goal=refactor_goal)
+
+
+@jarvis_tool(name="code_fix", tier=NOTIFY, desc="Fix code given an error message")
+async def code_fix(code: str, error_message: str, language: str = "python") -> dict:
+    from mcp_gateway.coding_agent import jarcore
+    return await jarcore.fix_code_errors(code=code, error_message=error_message, language=language)
+
+
+@jarvis_tool(name="code_test", tier=NOTIFY, desc="Generate unit tests for code")
+async def code_test(code: str, language: str = "python", test_framework: str = "") -> dict:
+    from mcp_gateway.coding_agent import jarcore
+    return await jarcore.generate_tests(code=code, language=language, test_framework=test_framework or None)
+
+
+# ── Coder / JARCORE (CONFIRM execute) ──────────────────────────────────────────
+# execute_code runs arbitrary code via subprocess with only OS resource
+# limits as a guard (mcp_gateway/coding_agent.py) — gated CONFIRM here as a
+# deliberate safety tightening versus the ungated `/code run` CLI command,
+# since an agent dispatching this automatically is a materially different
+# risk than a human typing it interactively.
+@jarvis_tool(name="code_execute", tier=CONFIRM, desc="Execute code and return its output — runs arbitrary code, requires approval")
+async def code_execute(code: str, language: str = "python", timeout: int = 30) -> dict:
+    from mcp_gateway.coding_agent import jarcore
+    return await jarcore.execute_code(code=code, language=language, timeout=timeout)

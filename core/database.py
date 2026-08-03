@@ -188,9 +188,29 @@ class Database:
                 last_error     TEXT DEFAULT '',
                 started_at     TIMESTAMP,
                 updated_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                context_json   TEXT NOT NULL DEFAULT '{}'
+                context_json   TEXT NOT NULL DEFAULT '{}',
+                mode           TEXT NOT NULL DEFAULT 'flat'
             )
         """)
+
+        # Per-subtask state for goals run in 'team' mode (LeadAgent dispatching
+        # role-scoped sub-agents, agent/lead.py) — one row per dispatched subtask.
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS subagent_state (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                goal_id         TEXT NOT NULL,
+                run_id          TEXT NOT NULL,
+                subtask_index   INTEGER NOT NULL,
+                subtask         TEXT,
+                role            TEXT NOT NULL,
+                status          TEXT NOT NULL DEFAULT 'pending',
+                result_summary  TEXT DEFAULT '',
+                updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_subagent_state_goal_run ON subagent_state(goal_id, run_id)"
+        )
 
         # Pending CONFIRM-tier approvals waiting for Slack button response
         await db.execute("""
@@ -280,6 +300,7 @@ class Database:
             ("m005_add_goal_state_tables", self._m005_add_goal_state_tables),
             ("m006_add_marketing_drafts", self._m006_add_marketing_drafts),
             ("m007_add_image_gen_jobs",   self._m007_add_image_gen_jobs),
+            ("m008_add_subagent_state",   self._m008_add_subagent_state),
         ]
 
         for name, fn in migrations:
@@ -396,6 +417,35 @@ class Database:
         await db.execute(
             "CREATE INDEX IF NOT EXISTS idx_image_gen_created ON image_gen_jobs(created_at)"
         )
+
+    @staticmethod
+    async def _m008_add_subagent_state(db) -> None:
+        """Add goal_state.mode and the subagent_state table for LeadAgent (agent/lead.py)."""
+        try:
+            await db.execute(
+                "ALTER TABLE goal_state ADD COLUMN mode TEXT NOT NULL DEFAULT 'flat'"
+            )
+        except Exception as err:
+            if "duplicate column" not in str(err).lower():
+                raise
+
+        cur = await db.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='subagent_state'"
+        )
+        if not await cur.fetchone():
+            await db.execute("""
+                CREATE TABLE subagent_state (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT, goal_id TEXT NOT NULL,
+                    run_id TEXT NOT NULL, subtask_index INTEGER NOT NULL,
+                    subtask TEXT, role TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    result_summary TEXT DEFAULT '',
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            await db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_subagent_state_goal_run ON subagent_state(goal_id, run_id)"
+            )
 
     async def add_conversation(self, session_id: str, user_message: str,
                              ai_response: str, model_used: str, 
@@ -844,6 +894,55 @@ class Database:
                 )
             else:
                 cur = await db.execute("SELECT * FROM goal_state ORDER BY updated_at DESC")
+            rows = await cur.fetchall()
+            return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # Sub-agent state (LeadAgent dispatching role-scoped sub-agents)
+    # ------------------------------------------------------------------
+
+    async def save_subagent_state(self, row: dict) -> None:
+        """Insert or update a subagent_state row, keyed by (goal_id, run_id, subtask_index)."""
+        async with _open_db(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cur = await db.execute(
+                "SELECT id FROM subagent_state WHERE goal_id = ? AND run_id = ? AND subtask_index = ?",
+                (row["goal_id"], row["run_id"], row["subtask_index"]),
+            )
+            existing = await cur.fetchone()
+            fields = {
+                "subtask": row.get("subtask", ""),
+                "role": row["role"],
+                "status": row.get("status", "pending"),
+                "result_summary": row.get("result_summary", ""),
+                "updated_at": datetime.utcnow().isoformat(),
+            }
+            if existing:
+                set_clause = ", ".join(f"{k} = ?" for k in fields)
+                await db.execute(
+                    f"UPDATE subagent_state SET {set_clause} WHERE id = ?",
+                    [*fields.values(), existing["id"]],
+                )
+            else:
+                fields["goal_id"] = row["goal_id"]
+                fields["run_id"] = row["run_id"]
+                fields["subtask_index"] = row["subtask_index"]
+                cols = ", ".join(fields.keys())
+                placeholders = ", ".join("?" for _ in fields)
+                await db.execute(
+                    f"INSERT INTO subagent_state ({cols}) VALUES ({placeholders})",
+                    list(fields.values()),
+                )
+            await db.commit()
+
+    async def list_subagent_state(self, goal_id: str, run_id: str) -> List[Dict]:
+        """List all subagent_state rows for a given goal run, ordered by subtask_index."""
+        async with _open_db(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cur = await db.execute(
+                "SELECT * FROM subagent_state WHERE goal_id = ? AND run_id = ? ORDER BY subtask_index",
+                (goal_id, run_id),
+            )
             rows = await cur.fetchall()
             return [dict(r) for r in rows]
 

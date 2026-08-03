@@ -93,7 +93,7 @@ class JarvisCLI:
             # Register all built-in tools (runs @jarvis_tool decorators)
             import agent.tools  # noqa: F401
 
-            from agent.loop import init_agent_loop
+            from agent.loop import init_agent_loop, set_agent_loop
             from core.slack_notifier import send_approval_request_async
             from llm.router import LLMRouter
 
@@ -105,9 +105,20 @@ class JarvisCLI:
                     reason=reason, goal_id=goal_id,
                 )
 
-            self._agent_loop = init_agent_loop(db=db, slack_send_approval=_slack_approval)
+            # AGENT_TEAM_MODE=flat_legacy is a rollback kill-switch: wire the
+            # original single flat AgentLoop directly instead of the
+            # lead-agent + role-scoped sub-agent team (agent/lead.py).
+            import os
+            if os.environ.get("AGENT_TEAM_MODE", "auto") == "flat_legacy":
+                self._agent_loop = init_agent_loop(db=db, slack_send_approval=_slack_approval)
+                theme.print_success("Unified agent loop initialised (flat_legacy mode)")
+            else:
+                from agent.lead import LeadAgent
+                lead = LeadAgent(db=db, slack_send_approval=_slack_approval)
+                set_agent_loop(lead)
+                self._agent_loop = lead
+                theme.print_success("Lead agent + role-scoped sub-agent team initialised")
             self._llm_router = _router
-            theme.print_success("Unified agent loop initialised")
 
             # ── Slack two-way listener ──────────────────────────────────────
             from core.slack_listener import slack_listener
@@ -515,13 +526,17 @@ class JarvisCLI:
         # Unhandled command — fall back to LLM
         return None
 
-    async def handle_chat_message_for_slack(self, message: str, session_id: str) -> str:
+    async def handle_chat_message_for_slack(self, message: str, session_id: str, label_source: bool = True) -> str:
         """
         Full JARVIS chat pipeline for Slack messages.
         Same as handle_chat_message() but:
           - accepts a per-user session_id (each Slack user has their own memory)
           - returns the response string instead of printing it
           - no terminal UI (no progress bars, no theme output)
+
+        label_source: whether to append the "From what I know from memory / tools /
+        training data" prefix instruction. This only makes sense in Slack, where users
+        can't see tool-call output — pass False for any other caller (terminal, API).
         """
         try:
             from core.security import vibe_checker, SecurityException
@@ -596,16 +611,19 @@ class JarvisCLI:
             from config import _build_system_prompt as _base_prompt
             sys_prompt = _base_prompt() if is_conversational else self._system_prompt
 
-            # Always tell JARVIS to label his source in Slack so the user knows
-            # whether the answer comes from memory, live tools, or training data
-            sys_prompt = (sys_prompt or "") + (
-                "\n\nIMPORTANT — you are responding in Slack. Always prefix your answer with "
-                "one of these source labels so the user knows where the information came from:\n"
-                "- If you used tool results: start with 'From what I can see right now through [tool name], ...'\n"
-                "- If the answer comes from RAG/memory context provided above: start with 'From what I know from memory, ...'\n"
-                "- If answering from training data only (no context or tools): start with 'From my general knowledge, ...'\n"
-                "Keep the label natural — weave it into the first sentence, don't just paste it robotically."
-            )
+            # Tell JARVIS to label his source in Slack so the user knows whether the
+            # answer comes from memory, live tools, or training data. Only applies
+            # there — other callers (terminal, API) pass label_source=False since
+            # this instruction fights the "skip the preamble" base persona.
+            if label_source:
+                sys_prompt = (sys_prompt or "") + (
+                    "\n\nIMPORTANT — you are responding in Slack. Always prefix your answer with "
+                    "one of these source labels so the user knows where the information came from:\n"
+                    "- If you used tool results: start with 'From what I can see right now through [tool name], ...'\n"
+                    "- If the answer comes from RAG/memory context provided above: start with 'From what I know from memory, ...'\n"
+                    "- If answering from training data only (no context or tools): start with 'From my general knowledge, ...'\n"
+                    "Keep the label natural — weave it into the first sentence, don't just paste it robotically."
+                )
 
             response = await self.llm_client.generate(
                 prompt=message + tool_suffix,
