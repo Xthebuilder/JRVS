@@ -367,6 +367,19 @@ class JarvisCLI:
                 await self.command_handler.handle_command(intent_cmd.lstrip("/"))
                 return
 
+            # ── Ad-hoc task routing ───────────────────────────────────────
+            # Multi-step action requests go to AgentLoop (plan → execute →
+            # reflect → verify) rather than the single-shot chat path. The
+            # Slack/API handler has done this for a while; the terminal did
+            # not, so the same request was agentic over Slack and a one-shot
+            # tool call in the REPL.
+            if await _needs_agent_loop(message, self.llm_client):
+                adhoc_id = f"adhoc_{uuid.uuid4().hex[:8]}"
+                theme.print_info("Multi-step request — routing to the agent planner…")
+                result = await self._run_goal_for_slack(adhoc_id, message)
+                theme.print_response(result)
+                return
+
             with theme.show_progress("Analyzing request...") as progress:
                 task = progress.add_task("", total=None)
 
@@ -570,7 +583,7 @@ class JarvisCLI:
             # ── Ad-hoc task routing ───────────────────────────────────────
             # If the message looks like a multi-step action request, send it
             # directly to AgentLoop rather than the chat path.
-            if _is_adhoc_task(message):
+            if await _needs_agent_loop(message, self.llm_client):
                 import uuid
                 adhoc_id = f"adhoc_{uuid.uuid4().hex[:8]}"
                 return await self._run_goal_for_slack(adhoc_id, message)
@@ -2046,6 +2059,102 @@ _ADHOC_TOOL_HINTS = [
     "and write", "and create", "and send", "then save",
     "in a file", "save it", "store it",
 ]
+
+# ── Agent-loop routing ────────────────────────────────────────────────────────
+#
+# _is_adhoc_task() below is precise but nearly deaf: it demands an action verb
+# at the *start* of the message AND one of a dozen file-save phrases, so
+# "pull together the Q3 numbers and email them to Dana" never reaches the
+# planner even though every capability it needs is registered. The keyword pass
+# is kept as a zero-latency fast accept; anything it misses that still looks
+# actionable gets one cheap LLM classification.
+
+_ROUTER_SYSTEM = """\
+You decide how to handle a message sent to JARVIS, a personal assistant.
+
+JARVIS can act through these tool groups:
+{roles}
+
+Answer with valid JSON only — no markdown, no explanation:
+{{"multi_step": true | false}}
+
+multi_step=true when fulfilling the message requires JARVIS to actually DO
+something with the tools above — especially when it takes more than one step,
+or one step whose result feeds another (fetch then save, search then email,
+read then summarise into a document).
+
+multi_step=false for conversation, questions answerable from knowledge or
+memory, opinions, greetings, and requests for a single short factual lookup.
+
+When unsure, answer false.
+"""
+
+# Any of these appearing anywhere earns a classification call; a message with
+# none of them is conversation and skips the LLM entirely.
+_ACTIONABLE_HINTS = frozenset({
+    "research", "find", "search", "look up", "fetch", "pull",
+    "create", "write", "save", "draft", "summarise", "summarize",
+    "analyse", "analyze", "compile", "generate", "list", "send",
+    "email", "schedule", "book", "calendar", "remind", "file",
+    "report", "document", "spreadsheet", "check", "review", "update",
+})
+
+_ROUTER_TIMEOUT = 8.0
+
+
+async def _needs_agent_loop(message: str, llm_client) -> bool:
+    """
+    Decide whether *message* should go to AgentLoop rather than plain chat.
+
+    Fails closed to the chat path on any error or timeout — a slow or broken
+    router must never make JARVIS unresponsive.
+    """
+    text = message.lower().strip()
+
+    # Fast accept — the old heuristic, kept for its zero latency.
+    if _is_adhoc_task(message):
+        return True
+
+    # Fast reject — too short to be a multi-step request, or no actionable
+    # word anywhere in it.
+    if len(text.split()) < 4:
+        return False
+    if not any(h in text for h in _ACTIONABLE_HINTS):
+        return False
+
+    if llm_client is None:
+        return False
+
+    try:
+        from agent.roles import role_catalogue_for_prompt
+        raw = await asyncio.wait_for(
+            llm_client.generate(
+                prompt=message.strip()[:600],
+                context="",
+                stream=False,
+                system_prompt=_ROUTER_SYSTEM.format(roles=role_catalogue_for_prompt()),
+            ),
+            timeout=_ROUTER_TIMEOUT,
+        )
+    except asyncio.TimeoutError:
+        logger.debug("_needs_agent_loop: router timed out after %.1fs — falling back to chat",
+                     _ROUTER_TIMEOUT)
+        return False
+    except Exception as exc:
+        logger.debug("_needs_agent_loop: router failed (%s) — falling back to chat", exc)
+        return False
+
+    if not raw:
+        return False
+
+    import re as _re
+    cleaned = _re.sub(r"```[^\n]*\n?|```", "", raw).strip()
+    try:
+        return bool(json.loads(cleaned).get("multi_step"))
+    except (ValueError, TypeError, AttributeError):
+        logger.debug("_needs_agent_loop: unparseable router reply %r", raw[:120])
+        return False
+
 
 def _is_adhoc_task(message: str) -> bool:
     """
