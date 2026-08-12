@@ -1730,10 +1730,8 @@ class JarvisCLI:
 
         theme.print_status(f"Proposed goals awaiting review ({len(proposed)}):", "info")
         for p in proposed:
-            conf = p.get("confidence")
-            conf_str = f"{conf:.2f}" if isinstance(conf, (int, float)) else "n/a"
             theme.console.print(
-                f"  [{p['id']}]  conf={conf_str}  via {p.get('proposed_by', '?')}"
+                f"  [{p['id']}]  via {p.get('proposed_by', '?')}  {p.get('proposed_at', '')}"
             )
             theme.console.print(f"      {p.get('goal', '')[:100]}")
             heard = p.get("heard")

@@ -101,34 +101,43 @@ _PROPOSE_SENSE_SYSTEM = textwrap.dedent("""\
     Respond with valid JSON only — no markdown, no explanation:
     {
       "is_task": true | false,
-      "confidence": 0.0-1.0,
+      "sounds_like_media": true | false,
+      "whose_task": "owner" | "someone_else" | "unclear",
       "goal_text": "one plain-English sentence describing the task",
       "suggested_id": "snake_case_slug_max_30_chars"
     }
 
-    Set is_task=false when ANY of these apply:
-    - The text reads like fiction, drama, news, or narration (crimes, weapons,
-      chases, medical emergencies, politics, wildlife, military, espionage).
-    - The actor is a third party or unnamed ("they", "he", "the team") rather
-      than the owner.
-    - The task references people, places, or objects with no plausible
-      connection to an ordinary person's daily errands.
-    - It is advice, opinion, hypothetical, or a line of dialogue.
-    - The transcript is fragmentary or you are unsure what was meant.
+    sounds_like_media — true if this could plausibly be a line from a film,
+    show, news broadcast, podcast or song. Crimes, weapons, chases, bodies,
+    vaults, medical emergencies, politics, espionage, wildlife peril and
+    military action are all overwhelmingly television, not a person's errands.
 
-    Set is_task=true ONLY when the owner is clearly speaking about their own
-    concrete errand, appointment, or follow-up — the mundane stuff of one
-    person's day. confidence reflects how sure you are the OWNER said it about
-    their OWN life, not how well-formed the sentence is.
+    whose_task — "owner" only if the speaker is talking about their OWN life
+    and their OWN obligation. Use "someone_else" when the actor is a third
+    party ("they", "he", "the team", a named character), and "unclear" when
+    the transcript is fragmentary or you cannot tell.
+
+    is_task — true only for a concrete errand, appointment, or follow-up: the
+    mundane stuff of one ordinary person's day (vehicles, appointments, bills,
+    groceries, chores, messages to real contacts).
+
+    A proposal is only kept when is_task is true AND sounds_like_media is false
+    AND whose_task is "owner". When in doubt about any of the three, answer in
+    the direction that discards the proposal.
 """)
 
-# Proposals from senses below this confidence are dropped without reaching
-# even the review inbox. Calibrated against mistral-nemo:12b on a 10-line
-# sample of real transcripts: overheard TV dialogue scored 0.00-0.20, genuine
-# errands 0.50-0.95. 0.4 sits in the gap with margin either side. Erring low is
-# deliberate — a queued false positive costs one /agent reject, whereas a
-# dropped real task is gone silently.
-_SENSE_MIN_CONFIDENCE = 0.4
+# The gate reads three independent fields rather than one score. An earlier
+# version keyed on a single "confidence" number and worked well on
+# mistral-nemo:12b (overheard dialogue 0.00-0.20, real errands 0.50-0.95) but
+# collapsed on gpt-oss:20b, which reads "confidence" as certainty in its own
+# answer and returned 0.70-0.95 for everything — no separation left to
+# threshold. Three narrow yes/no questions survive that difference: a model
+# that misreads one still gets caught by another.
+_SENSE_REQUIRED = {
+    "is_task": True,
+    "sounds_like_media": False,
+    "whose_task": "owner",
+}
 
 
 def _text_has_task_hint(text: str) -> bool:
@@ -601,21 +610,22 @@ class GoalScheduler:
         if not goal_text or not raw_id:
             return None
 
-        # Confidence gate — senses only. A missing/unparseable score is treated
-        # as 0.0 so a model that ignores the field fails closed rather than
-        # flooding the inbox.
-        confidence = 0.0
+        # Provenance gate — senses only. Every required field must be present
+        # AND match, so a model that omits or misreads one fails closed rather
+        # than flooding the inbox.
         if from_sense:
-            try:
-                confidence = float(parsed.get("confidence", 0.0))
-            except (TypeError, ValueError):
-                confidence = 0.0
-            if confidence < _SENSE_MIN_CONFIDENCE:
-                log.debug(
-                    "propose_goal: dropped low-confidence %s proposal (%.2f < %.2f) — %r",
-                    source, confidence, _SENSE_MIN_CONFIDENCE, goal_text[:60],
-                )
-                return None
+            for field, required in _SENSE_REQUIRED.items():
+                actual = parsed.get(field)
+                if isinstance(required, bool):
+                    ok = actual is required
+                else:
+                    ok = isinstance(actual, str) and actual.strip().lower() == required
+                if not ok:
+                    log.debug(
+                        "propose_goal: dropped %s proposal on %s=%r (need %r) — %r",
+                        source, field, actual, required, goal_text[:60],
+                    )
+                    return None
 
         # Sanitise ID — lowercase, underscores, max 30 chars, ensure uniqueness
         safe_id = re.sub(r"[^a-z0-9_]", "_", raw_id.lower())[:28]
@@ -632,7 +642,6 @@ class GoalScheduler:
                     "goal": goal_text,
                     "proposed_by": source,
                     "proposed_at": datetime.now().isoformat(timespec="seconds"),
-                    "confidence": round(confidence, 2),
                     "heard": text.strip()[:300],
                 })
             except Exception as exc:
@@ -640,8 +649,8 @@ class GoalScheduler:
                 return None
 
             log.info(
-                "propose_goal: queued '%s' from %s for review (conf=%.2f) — %r",
-                goal_id, source, confidence, goal_text[:80],
+                "propose_goal: queued '%s' from %s for review — %r",
+                goal_id, source, goal_text[:80],
             )
             return goal_id
 
