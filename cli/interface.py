@@ -2,6 +2,7 @@
 import asyncio
 import json
 import logging
+import os
 import uuid
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -2097,7 +2098,15 @@ _ACTIONABLE_HINTS = frozenset({
     "report", "document", "spreadsheet", "check", "review", "update",
 })
 
-_ROUTER_TIMEOUT = 8.0
+# Budget for one routing classification. 8s was fine for mistral-nemo:12b, but a
+# reasoning model spends tokens thinking before it answers: deepseek-r1:14b took
+# 13.2s on a measured classification, which would have tripped the old timeout and
+# silently dropped the request back to the chat path — routing would appear to
+# "just stop working" with nothing in the log above debug. Sized for the slowest
+# supported local model; only messages that already passed the actionable-word
+# filter can ever wait this long, and they are the ones about to spend far longer
+# in the planner anyway.
+_ROUTER_TIMEOUT = float(os.environ.get("JRVS_ROUTER_TIMEOUT", "25"))
 
 
 async def _needs_agent_loop(message: str, llm_client) -> bool:

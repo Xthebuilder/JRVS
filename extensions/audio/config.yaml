@@ -20,7 +20,13 @@ input:
 
 stt:
   backend: "whisper"
-  model: "medium"        # tiny | base | small | medium | large-v3
+  model: "small"         # tiny | base | small | medium | large-v3
+                         # Dropped medium -> small 2026-08-11 to fit deepseek-r1:14b.
+                         # deepseek needs an 8.5GB contiguous CUDA buffer and, unlike
+                         # gpt-oss:20b, fails outright rather than splitting to CPU;
+                         # with whisper-medium resident there was ~0.1GB of margin and
+                         # ollama returned intermittent HTTP 500s. Revert to medium if
+                         # the default model moves back to something under ~8GB.
   language: "en"         # ISO 639-1 code, or null for auto-detect
   device: "cuda"         # "cpu" or "cuda"
   compute_type: "float16"  # int8 (CPU) | float16 (GPU) | float32
