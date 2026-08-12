@@ -346,14 +346,24 @@ class CommandHandler:
                     await self.cli.agent_start_scheduler()
                 elif sub == "stop":
                     await self.cli.agent_stop_scheduler()
+                elif sub == "inbox":
+                    self.cli.agent_list_proposed()
+                elif sub in ("accept", "reject"):
+                    if len(command_args) < 2:
+                        theme.print_error(f"Usage: /agent {sub} <id>  (see /agent inbox)")
+                    else:
+                        self.cli.agent_review_proposed(command_args[1], accept=(sub == "accept"))
                 else:
-                    theme.print_error("Usage: /agent <goals|run|status|start|stop>")
+                    theme.print_error("Usage: /agent <goals|run|status|start|stop|inbox|accept|reject>")
                     theme.print_info("  /agent goals                          - List all goals from goals.yaml")
                     theme.print_info("  /agent run <id>                       - Run a specific goal now")
                     theme.print_info("  /agent run --schedule <morning|...>   - Run all goals for a schedule")
                     theme.print_info("  /agent status                         - Show scheduler state")
                     theme.print_info("  /agent start                          - Start the background scheduler")
                     theme.print_info("  /agent stop                           - Stop the background scheduler")
+                    theme.print_info("  /agent inbox                          - Review goals proposed by audio/vision")
+                    theme.print_info("  /agent accept <id>                    - Promote a proposal into goals.yaml")
+                    theme.print_info("  /agent reject <id>                    - Discard a proposal")
 
             elif command == "download":
                 # Natural-language download confirmation (e.g. "go ahead and download them")

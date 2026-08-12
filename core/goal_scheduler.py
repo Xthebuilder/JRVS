@@ -30,6 +30,20 @@ log = logging.getLogger(__name__)
 
 _GOALS_FILE = Path(__file__).parent.parent / "goals.yaml"
 
+# Review inbox for goals proposed by passive senses (room audio, vision).
+# These never land in goals.yaml directly — see propose_goal().
+_PROPOSED_FILE = Path(__file__).parent.parent / "data" / "proposed_goals.yaml"
+
+# Sources that observe the room rather than being addressed by the user.
+# A microphone picks up television, films, other people's phone calls and
+# passers-by; none of that is Xavier assigning JARVIS a task, but it is
+# grammatically indistinguishable from him doing so. Proposals from these
+# sources go to the review inbox instead of goals.yaml.
+_SENSE_SOURCES = frozenset({"ambient_audio", "vision", "sense"})
+
+# Keep the inbox bounded — it is a review queue, not an archive.
+_MAX_PROPOSED = 50
+
 # ---------------------------------------------------------------------------
 # Proactive goal proposal helpers
 # ---------------------------------------------------------------------------
@@ -66,6 +80,57 @@ _PROPOSE_SYSTEM = textwrap.dedent("""\
 """)
 
 
+# Stricter variant for passive senses. The default prompt asks only "is this a
+# task?", which overheard dialogue answers "yes" to constantly — a film
+# character saying "we need to call the conservation center" is a perfectly
+# well-formed task, just not one of Xavier's. This prompt asks the harder
+# question: is the *speaker in this room* committing to something in their own
+# real life?
+_PROPOSE_SENSE_SYSTEM = textwrap.dedent("""\
+    You are a task-detection assistant for JARVIS.
+
+    The text below is an unreliable transcript of audio picked up in the
+    owner's room. It may be the owner speaking — but it is just as likely to
+    be a television, film, video, podcast, music, a phone call you only hear
+    one side of, or another person talking about their own business.
+
+    Your job: decide if the OWNER is committing to a real task in their own
+    life that JARVIS should remember. Default to false. It is far better to
+    miss a real task than to invent one.
+
+    Respond with valid JSON only — no markdown, no explanation:
+    {
+      "is_task": true | false,
+      "confidence": 0.0-1.0,
+      "goal_text": "one plain-English sentence describing the task",
+      "suggested_id": "snake_case_slug_max_30_chars"
+    }
+
+    Set is_task=false when ANY of these apply:
+    - The text reads like fiction, drama, news, or narration (crimes, weapons,
+      chases, medical emergencies, politics, wildlife, military, espionage).
+    - The actor is a third party or unnamed ("they", "he", "the team") rather
+      than the owner.
+    - The task references people, places, or objects with no plausible
+      connection to an ordinary person's daily errands.
+    - It is advice, opinion, hypothetical, or a line of dialogue.
+    - The transcript is fragmentary or you are unsure what was meant.
+
+    Set is_task=true ONLY when the owner is clearly speaking about their own
+    concrete errand, appointment, or follow-up — the mundane stuff of one
+    person's day. confidence reflects how sure you are the OWNER said it about
+    their OWN life, not how well-formed the sentence is.
+""")
+
+# Proposals from senses below this confidence are dropped without reaching
+# even the review inbox. Calibrated against mistral-nemo:12b on a 10-line
+# sample of real transcripts: overheard TV dialogue scored 0.00-0.20, genuine
+# errands 0.50-0.95. 0.4 sits in the gap with margin either side. Erring low is
+# deliberate — a queued false positive costs one /agent reject, whereas a
+# dropped real task is gone silently.
+_SENSE_MIN_CONFIDENCE = 0.4
+
+
 def _text_has_task_hint(text: str) -> bool:
     """Fast keyword scan before spending an LLM call."""
     lower = text.lower()
@@ -92,6 +157,80 @@ def _append_goal_to_yaml(goal_dict: Dict[str, Any]) -> None:
     _GOALS_FILE.write_text(
         yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False)
     )
+
+
+def _load_proposed() -> List[Dict[str, Any]]:
+    """Read the review inbox. Returns [] when absent or malformed."""
+    if not _PROPOSED_FILE.exists():
+        return []
+    try:
+        data = yaml.safe_load(_PROPOSED_FILE.read_text()) or {}
+    except (yaml.YAMLError, OSError) as exc:
+        log.warning("proposed_goals.yaml unreadable (%s) — treating as empty.", exc)
+        return []
+    proposed = data.get("proposed", []) if isinstance(data, dict) else []
+    return [p for p in proposed if isinstance(p, dict) and p.get("id")]
+
+
+def _write_proposed(entries: List[Dict[str, Any]]) -> None:
+    """Persist the review inbox, newest last, capped at _MAX_PROPOSED."""
+    _PROPOSED_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _PROPOSED_FILE.write_text(
+        yaml.dump(
+            {"proposed": entries[-_MAX_PROPOSED:]},
+            default_flow_style=False, allow_unicode=True, sort_keys=False,
+        )
+    )
+
+
+def _append_proposed(entry: Dict[str, Any]) -> None:
+    """Add one entry to the review inbox, skipping duplicate IDs."""
+    entries = _load_proposed()
+    if any(e.get("id") == entry["id"] for e in entries):
+        return
+    entries.append(entry)
+    _write_proposed(entries)
+
+
+def list_proposed_goals() -> List[Dict[str, Any]]:
+    """Public: everything awaiting review, newest first."""
+    return list(reversed(_load_proposed()))
+
+
+def reject_proposed_goal(goal_id: str) -> bool:
+    """Drop a proposal from the inbox. Returns False if the ID is unknown."""
+    entries = _load_proposed()
+    remaining = [e for e in entries if e.get("id") != goal_id]
+    if len(remaining) == len(entries):
+        return False
+    _write_proposed(remaining)
+    log.info("reject_proposed_goal: discarded '%s'", goal_id)
+    return True
+
+
+def accept_proposed_goal(goal_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Promote a reviewed proposal into goals.yaml as a real goal.
+    Returns the goal dict written, or None if the ID is unknown.
+    """
+    entry = next((e for e in _load_proposed() if e.get("id") == goal_id), None)
+    if entry is None:
+        return None
+
+    goal_dict = {
+        "id": entry["id"],
+        "goal": entry["goal"],
+        "schedules": ["manual"],
+        "tier": "confirm",
+        "enabled": True,
+        "proposed_by": entry.get("proposed_by", "sense"),
+        "proposed_at": entry.get("proposed_at"),
+        "accepted_at": datetime.now().isoformat(timespec="seconds"),
+    }
+    _append_goal_to_yaml(goal_dict)
+    reject_proposed_goal(goal_id)
+    log.info("accept_proposed_goal: promoted '%s' to goals.yaml", goal_id)
+    return goal_dict
 
 
 def _load_goals() -> List[Dict[str, Any]]:
@@ -425,12 +564,16 @@ class GoalScheduler:
         if self._llm_client is None:
             return None
 
+        # Passive senses are held to a stricter prompt and land in the review
+        # inbox rather than goals.yaml.
+        from_sense = source in _SENSE_SOURCES
+
         try:
             raw = await self._llm_client.generate(
                 prompt=f"Text to analyse:\n{text.strip()[:800]}",
                 context="",
                 stream=False,
-                system_prompt=_PROPOSE_SYSTEM,
+                system_prompt=_PROPOSE_SENSE_SYSTEM if from_sense else _PROPOSE_SYSTEM,
             )
         except Exception as exc:
             log.debug("propose_goal: LLM call failed: %s", exc)
@@ -458,10 +601,49 @@ class GoalScheduler:
         if not goal_text or not raw_id:
             return None
 
+        # Confidence gate — senses only. A missing/unparseable score is treated
+        # as 0.0 so a model that ignores the field fails closed rather than
+        # flooding the inbox.
+        confidence = 0.0
+        if from_sense:
+            try:
+                confidence = float(parsed.get("confidence", 0.0))
+            except (TypeError, ValueError):
+                confidence = 0.0
+            if confidence < _SENSE_MIN_CONFIDENCE:
+                log.debug(
+                    "propose_goal: dropped low-confidence %s proposal (%.2f < %.2f) — %r",
+                    source, confidence, _SENSE_MIN_CONFIDENCE, goal_text[:60],
+                )
+                return None
+
         # Sanitise ID — lowercase, underscores, max 30 chars, ensure uniqueness
         safe_id = re.sub(r"[^a-z0-9_]", "_", raw_id.lower())[:28]
         ts_suffix = datetime.now().strftime("%m%d%H%M")
         goal_id = f"{safe_id}_{ts_suffix}"
+
+        # Senses propose; only the user promotes. Anything overheard goes to the
+        # review inbox with the transcript that triggered it, so a bad call is
+        # visible junk in a queue rather than an enabled goal.
+        if from_sense:
+            try:
+                _append_proposed({
+                    "id": goal_id,
+                    "goal": goal_text,
+                    "proposed_by": source,
+                    "proposed_at": datetime.now().isoformat(timespec="seconds"),
+                    "confidence": round(confidence, 2),
+                    "heard": text.strip()[:300],
+                })
+            except Exception as exc:
+                log.error("propose_goal: failed to write proposed_goals.yaml: %s", exc)
+                return None
+
+            log.info(
+                "propose_goal: queued '%s' from %s for review (conf=%.2f) — %r",
+                goal_id, source, confidence, goal_text[:80],
+            )
+            return goal_id
 
         goal_dict: Dict[str, Any] = {
             "id": goal_id,

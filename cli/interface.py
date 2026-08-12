@@ -221,6 +221,21 @@ class JarvisCLI:
         except Exception:
             pass
 
+        # Surface the sense-proposal review inbox as a count only — these are
+        # unvetted guesses off room audio, so they get a one-line mention
+        # rather than the space a real pending goal gets.
+        try:
+            from core.goal_scheduler import list_proposed_goals
+            proposed = list_proposed_goals()
+            if proposed:
+                theme.print_info(
+                    f"🎙 {len(proposed)} goal(s) proposed from audio/vision await review "
+                    f"— run /agent inbox"
+                )
+                theme.print_separator()
+        except Exception:
+            pass
+
         # Surface any pending scheduled actions waiting for approve/deny
         try:
             pending_jobs = await cron_scheduler.get_pending()
@@ -1690,6 +1705,44 @@ class JarvisCLI:
                 f"  [{enabled}] {g['id']:<30}  sched={schedules:<20}  tier={tier:<8}  last={last_str}"
             )
         theme.print_info("Run a goal with: /agent run <id>")
+
+    def agent_list_proposed(self):
+        """Show goals proposed by passive senses, awaiting review."""
+        from core.goal_scheduler import list_proposed_goals
+
+        proposed = list_proposed_goals()
+        if not proposed:
+            theme.print_info("Nothing awaiting review.")
+            return
+
+        theme.print_status(f"Proposed goals awaiting review ({len(proposed)}):", "info")
+        for p in proposed:
+            conf = p.get("confidence")
+            conf_str = f"{conf:.2f}" if isinstance(conf, (int, float)) else "n/a"
+            theme.console.print(
+                f"  [{p['id']}]  conf={conf_str}  via {p.get('proposed_by', '?')}"
+            )
+            theme.console.print(f"      {p.get('goal', '')[:100]}")
+            heard = p.get("heard")
+            if heard:
+                theme.console.print(f"      heard: \"{heard[:100]}\"")
+        theme.print_info("Promote with: /agent accept <id>   •   Discard with: /agent reject <id>")
+
+    def agent_review_proposed(self, goal_id: str, accept: bool):
+        """Promote a proposal into goals.yaml, or discard it."""
+        from core.goal_scheduler import accept_proposed_goal, reject_proposed_goal
+
+        if accept:
+            goal = accept_proposed_goal(goal_id)
+            if goal is None:
+                theme.print_error(f"No proposal with id '{goal_id}' — see /agent inbox")
+                return
+            theme.print_success(f"Promoted '{goal_id}' to goals.yaml — run it with /agent run {goal_id}")
+        else:
+            if not reject_proposed_goal(goal_id):
+                theme.print_error(f"No proposal with id '{goal_id}' — see /agent inbox")
+                return
+            theme.print_success(f"Discarded '{goal_id}'.")
 
     async def _run_goal_for_slack(self, goal_id: str, original_message: str) -> str:
         """Run a goal via AgentLoop and return a Slack-friendly result string."""
