@@ -188,6 +188,20 @@ async def main() -> None:
     )
     log.info("Image generation module running (supervised, ComfyUI at %s)", "http://127.0.0.1:8188")
 
+    # --- Embedding model idle-unload (frees GPU memory when RAG goes unused) ---
+    from rag.embeddings import embedding_manager
+    from config import EMBEDDING_IDLE_UNLOAD_SECONDS
+    supervised_tasks.append(
+        asyncio.create_task(
+            _supervise(
+                "embedding-idle-unload",
+                lambda: embedding_manager.idle_unload_loop(EMBEDDING_IDLE_UNLOAD_SECONDS),
+            ),
+            name="supervise-embedding-idle-unload",
+        )
+    )
+    log.info("Embedding idle-unload watcher running (timeout=%ds)", EMBEDDING_IDLE_UNLOAD_SECONDS)
+
     # Run forever — SIGTERM/SIGINT trigger graceful shutdown
     loop = asyncio.get_running_loop()
     stop = loop.create_future()

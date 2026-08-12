@@ -19,6 +19,8 @@ class EmbeddingManager:
         self._device = None
         self._embedding_cache = {}
         self._max_cache_size = 1000
+        self._last_used = time.time()
+        self._lock = asyncio.Lock()
 
         # BGE models expect a retrieval instruction prepended to *queries only*
         # (not to corpus documents). Other models leave this empty.
@@ -27,10 +29,39 @@ class EmbeddingManager:
         else:
             self._query_prefix = ""
 
+    def _touch(self):
+        self._last_used = time.time()
+
     async def initialize(self):
         """Lazy initialization of the embedding model"""
         if self._model is None:
-            await self._load_model()
+            async with self._lock:
+                if self._model is None:
+                    await self._load_model()
+
+    async def unload(self):
+        """Free the model and its CUDA memory. Reloads lazily on next use."""
+        async with self._lock:
+            if self._model is None:
+                return
+            log.info("Unloading embedding model '%s' after idle timeout (device=%s)",
+                      self.model_name, self._device)
+            self._model = None
+            if self._device == "cuda":
+                torch.cuda.empty_cache()
+
+    async def idle_unload_loop(self, timeout_seconds: int, check_interval: int = 300):
+        """Background task: unload the model after `timeout_seconds` of no use.
+
+        Safe to run forever — no-op whenever the model is already unloaded.
+        Pass timeout_seconds <= 0 to disable.
+        """
+        if timeout_seconds <= 0:
+            return
+        while True:
+            await asyncio.sleep(check_interval)
+            if self._model is not None and (time.time() - self._last_used) >= timeout_seconds:
+                await self.unload()
 
     async def _load_model(self):
         """Load the sentence transformer model in a thread pool"""
@@ -82,6 +113,8 @@ class EmbeddingManager:
                     Set this when embedding user queries, not when embedding documents.
         """
         await self.initialize()
+        self._touch()
+        model = self._model  # local reference: survives a concurrent idle-unload
 
         if isinstance(text, str):
             text = [text]
@@ -119,7 +152,7 @@ class EmbeddingManager:
                     loop = asyncio.get_running_loop()
                     batch_embs = await loop.run_in_executor(
                         None,
-                        lambda b=batch: self._model.encode(b, convert_to_numpy=True, show_progress_bar=False),
+                        lambda b=batch, m=model: m.encode(b, convert_to_numpy=True, show_progress_bar=False),
                     )
                     all_new.extend(batch_embs)
 

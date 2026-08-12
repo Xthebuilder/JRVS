@@ -175,6 +175,9 @@ CONVERSATION_HISTORY_TURNS = 8   # how many recent turns to pass to the LLM as m
 
 # Embedding model — kept for backward-compat; Mem0 backend uses MEM0_EMBEDDING_MODEL.
 EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "BAAI/bge-base-en-v1.5")
+# Unload the embedding model (and free its GPU memory) after this many seconds
+# of no encode_text() calls; reloads lazily on the next call. 0 disables.
+EMBEDDING_IDLE_UNLOAD_SECONDS = int(os.environ.get("EMBEDDING_IDLE_UNLOAD_SECONDS", "3600"))
 
 # ── Mem0 settings ─────────────────────────────────────────────────────────────
 # Data directory for Mem0's on-disk Qdrant index and SQLite history DB.
