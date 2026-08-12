@@ -178,6 +178,11 @@ EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "BAAI/bge-base-en-v1.5")
 # Unload the embedding model (and free its GPU memory) after this many seconds
 # of no encode_text() calls; reloads lazily on the next call. 0 disables.
 EMBEDDING_IDLE_UNLOAD_SECONDS = int(os.environ.get("EMBEDDING_IDLE_UNLOAD_SECONDS", "3600"))
+# Where the sentence-transformers embedding model lives: "cuda", "cpu", or
+# "auto" (default — GPU when available). Pin to "cpu" to hand its ~0.9GB of
+# VRAM back to the chat model; under RAG_BACKEND=mem0 retrieval embeddings come
+# from ollama instead, so this model is the alternate FAISS path.
+EMBEDDING_DEVICE = os.environ.get("EMBEDDING_DEVICE", "auto").lower()
 
 # ── Mem0 settings ─────────────────────────────────────────────────────────────
 # Data directory for Mem0's on-disk Qdrant index and SQLite history DB.

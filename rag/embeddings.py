@@ -7,7 +7,7 @@ from typing import List, Union
 from sentence_transformers import SentenceTransformer
 import torch
 import time
-from config import EMBEDDING_BATCH_SIZE, TIMEOUTS, EMBEDDING_MODEL
+from config import EMBEDDING_BATCH_SIZE, TIMEOUTS, EMBEDDING_MODEL, EMBEDDING_DEVICE
 
 log = logging.getLogger(__name__)
 
@@ -76,7 +76,18 @@ class EmbeddingManager:
             logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
             logging.getLogger("transformers").setLevel(logging.ERROR)
 
-            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            # EMBEDDING_DEVICE lets this model be pinned off the GPU. Under
+            # RAG_BACKEND=mem0 the actual retrieval embeddings come from ollama
+            # (nomic-embed-text), so this model is the alternate FAISS path and
+            # its ~0.9GB of VRAM is usually worth more to the chat model — a 14B
+            # class model on a 12GB card fails to allocate its compute buffers
+            # with this resident.
+            if EMBEDDING_DEVICE in ("cpu", "cuda"):
+                device = EMBEDDING_DEVICE
+            else:
+                device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            if device == 'cuda' and not torch.cuda.is_available():
+                device = 'cpu'
             self._device = device
             # show_progress_bar=False suppresses the tqdm download/encode bars
             model = SentenceTransformer(
