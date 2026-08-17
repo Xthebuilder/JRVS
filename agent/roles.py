@@ -25,8 +25,12 @@ ROLES: dict[str, dict] = {
         "desc": "Marketing copy drafts and image generation",
     },
     "coder": {
-        "prefixes": {"code_"},
-        "desc": "Code generation, analysis, refactoring, testing, and execution",
+        # file_ is included deliberately: a coder that can generate code but not
+        # save it plans a file_write anyway, and the step is silently dropped as
+        # an unknown tool — which is how "save this to a file" requests ended up
+        # reported complete with nothing written.
+        "prefixes": {"code_", "file_"},
+        "desc": "Code generation, analysis, refactoring, testing, execution, and saving files",
     },
 }
 

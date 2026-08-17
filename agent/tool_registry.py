@@ -12,6 +12,7 @@ Import agent.tools to register all built-in tools before using the registry.
 """
 from __future__ import annotations
 
+import inspect
 import logging
 from typing import Any, Callable, Optional
 
@@ -31,15 +32,85 @@ def max_tier(a: str, b: str) -> str:
     return a if TIER_ORDER.get(a, 2) >= TIER_ORDER.get(b, 2) else b
 
 
+def _type_name(param: inspect.Parameter) -> str:
+    """Render ':type' for a parameter, or '' when it has no simple annotation.
+
+    Names alone are not enough: a planner told only that code_analyze takes
+    'analysis_type' will happily send a list, and the tool then does a dict
+    lookup on it and dies with "unhashable type: 'list'". Advertising ':str'
+    is far cheaper than validating every argument's shape at call time.
+    """
+    ann = param.annotation
+    if ann is inspect.Parameter.empty:
+        return ""
+    # Modules using `from __future__ import annotations` (agent/tools.py does)
+    # hand back the annotation as a string rather than the type object, so both
+    # forms have to be handled.
+    name = ann if isinstance(ann, str) else getattr(ann, "__name__", None)
+    # Only emit short, unambiguous builtin names — anything else (Optional[...],
+    # unions, custom classes) costs prompt tokens without guiding the model.
+    if name in {"str", "int", "float", "bool", "list", "dict"}:
+        return f":{name}"
+    return ""
+
+
+def _describe_params(fn: Callable) -> tuple[str, frozenset[str], bool, frozenset[str]]:
+    """Render a tool's call signature for the prompt, plus its accepted names.
+
+    Returns (signature_text, accepted_names, accepts_any_kwarg, required_names).
+    Required
+    parameters are listed bare, optional ones get a trailing '?', and **kwargs
+    renders as '**name'. The text is deliberately terse: OLLAMA_NUM_CTX is as
+    low as 4096 on this box, so the catalogue competes with the rest of the
+    prompt for room.
+    """
+    try:
+        sig = inspect.signature(fn)
+    except (TypeError, ValueError):
+        # Un-introspectable (C builtin, exotic wrapper): advertise nothing and
+        # let the call through rather than blocking a working tool.
+        return "", frozenset(), True, frozenset()
+
+    rendered: list[str] = []
+    accepted: set[str] = set()
+    required: set[str] = set()
+    var_kw = False
+    for name, param in sig.parameters.items():
+        if name == "self":
+            continue
+        if param.kind is inspect.Parameter.VAR_KEYWORD:
+            rendered.append(f"**{name}")
+            var_kw = True
+            continue
+        if param.kind is inspect.Parameter.VAR_POSITIONAL:
+            continue
+        accepted.add(name)
+        optional = param.default is not inspect.Parameter.empty
+        if not optional:
+            required.add(name)
+        rendered.append(f"{name}?{_type_name(param)}" if optional
+                        else f"{name}{_type_name(param)}")
+
+    text = "(" + ", ".join(rendered) + ")" if rendered else "()"
+    return text, frozenset(accepted), var_kw, frozenset(required)
+
+
 class ToolSpec:
     """Metadata and callable for a registered tool."""
-    __slots__ = ("name", "tier", "desc", "fn")
+    __slots__ = ("name", "tier", "desc", "fn", "params_text", "accepted_params",
+                 "accepts_any_kwarg", "required_params")
 
     def __init__(self, name: str, tier: str, desc: str, fn: Callable) -> None:
         self.name = name
         self.tier = tier
         self.desc = desc
         self.fn   = fn
+        # Computed once at registration — the catalogue is rebuilt on every
+        # planner call, so per-prompt introspection would be wasted work.
+        (self.params_text,
+         self.accepted_params,
+         self.accepts_any_kwarg,
+         self.required_params) = _describe_params(fn)
 
 
 class ToolRegistry:
@@ -87,7 +158,12 @@ class ToolRegistry:
         for spec in sorted(cls._tools.values(), key=lambda s: (TIER_ORDER[s.tier], s.name)):
             if exclude and any(spec.name.startswith(p) or spec.name == p for p in exclude):
                 continue
-            lines.append(f"  {spec.name} [{spec.tier.upper()}] — {spec.desc}")
+            # The signature is not decoration: call() dispatches with fn(**args),
+            # so a guessed parameter name is a hard TypeError. Without this the
+            # planner has to infer argument names from the description alone.
+            lines.append(
+                f"  {spec.name}{spec.params_text} [{spec.tier.upper()}] — {spec.desc}"
+            )
         return "\n".join(lines)
 
     @classmethod
@@ -102,6 +178,24 @@ class ToolRegistry:
         spec = cls._tools.get(name)
         if spec is None:
             raise ValueError(f"Unknown tool: {name!r}")
+
+        # Surface the accepted parameter names on a mismatch. AgentLoop retries
+        # failed steps, but a bare "unexpected keyword argument 'file_path'"
+        # gives it nothing to correct toward, so it just guesses again.
+        unknown = set(args) - spec.accepted_params
+        if unknown and not spec.accepts_any_kwarg:
+            raise TypeError(
+                f"{name}() got unexpected argument(s) {sorted(unknown)}; "
+                f"accepted parameters are {sorted(spec.accepted_params)}"
+            )
+
+        missing = spec.required_params - set(args)
+        if missing:
+            raise TypeError(
+                f"{name}() is missing required argument(s) {sorted(missing)}; "
+                f"accepted parameters are {sorted(spec.accepted_params)}"
+            )
+
         return await spec.fn(**args)
 
 

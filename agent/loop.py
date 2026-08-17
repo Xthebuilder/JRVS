@@ -74,7 +74,7 @@ Rules:
 7. Google tools (gmail_*, docs_*, sheets_*, calendar_*) require OAuth credentials.
    If credentials are not available, use file_write/file_read instead of docs_create/docs_append.
    Do NOT retry a Google tool that has already failed — use a local alternative.
-8. file_write saves to ~/jarvis_sandbox/ — use it for any "save to file" task.
+8. file_write saves to ~/jrvs-workspace/ — use it for any "save to file" task.
 """
 
 
@@ -426,6 +426,19 @@ class AgentLoop:
         # AUTO or NOTIFY — execute immediately
         try:
             result = await tool_registry.call(step.tool, args)
+
+            # Tools report expected failures by returning {"error": ...} rather
+            # than raising. Only exceptions were treated as failures, so a step
+            # could return "content is empty", be logged OK, and the whole goal
+            # reported complete while nothing happened. Surface it as an error
+            # so the loop replans with the tool's own message as the hint.
+            if isinstance(result, dict) and result.get("error"):
+                log.warning(
+                    "AgentLoop: step %d (%s) returned an error: %s",
+                    step.step, step.tool, result["error"],
+                )
+                return {"status": "error", "error": str(result["error"])}
+
             log.info("AgentLoop: step %d [%s] %s — OK", step.step, tier.upper(), step.tool)
             if tier == NOTIFY:
                 await _notify_slack(

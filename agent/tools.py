@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from functools import partial
 from pathlib import Path
 from typing import Any, Optional
@@ -183,7 +184,13 @@ async def web_search(query: str, max_results: int = 5) -> list:
 
 # ── Local file sandbox (AUTO reads / NOTIFY writes) ──────────────────────────
 
-_SANDBOX = Path.home() / "jarvis_sandbox"
+# Defaults to ~/jrvs-workspace: it is the path JRVS advertises to users, and
+# it is already on the MCP filesystem server's allow-list, so the file_* tools
+# and the MCP filesystem tools operate on the same directory instead of two
+# different ones. Override with JRVS_SANDBOX_DIR.
+_SANDBOX = Path(
+    os.environ.get("JRVS_SANDBOX_DIR") or (Path.home() / "jrvs-workspace")
+).expanduser()
 
 
 def _sandbox_path(filename: str) -> Path:
@@ -194,7 +201,7 @@ def _sandbox_path(filename: str) -> Path:
     return safe
 
 
-@jarvis_tool(name="file_read", tier=AUTO, desc="Read a file from the JARVIS sandbox (~/ jarvis_sandbox/)")
+@jarvis_tool(name="file_read", tier=AUTO, desc="Read a file from the JARVIS workspace (~/jrvs-workspace/)")
 async def file_read(filename: str = "", path: str = "") -> str:
     _SANDBOX.mkdir(parents=True, exist_ok=True)
     name = filename or (Path(path).name if path else "")
@@ -206,18 +213,24 @@ async def file_read(filename: str = "", path: str = "") -> str:
     return fpath.read_text(encoding="utf-8")
 
 
-@jarvis_tool(name="file_write", tier=NOTIFY, desc="Write or overwrite a file in the JARVIS sandbox (~/ jarvis_sandbox/)")
-async def file_write(filename: str = "", path: str = "", content: str = "") -> dict:
+@jarvis_tool(name="file_write", tier=NOTIFY,
+             desc="Write a file to the JARVIS workspace (~/jrvs-workspace/); content is the full text to write")
+async def file_write(content: str, filename: str = "", path: str = "") -> dict:
     _SANDBOX.mkdir(parents=True, exist_ok=True)
     name = filename or (Path(path).name if path else "")
     if not name:
         return {"error": "filename is required"}
+    # A planner that supplies content="" writes a silent 0-byte file and reports
+    # success, so the user only finds out when they open it. Refuse instead, and
+    # say what is missing so the retry can fill it in.
+    if not content.strip():
+        return {"error": "content is empty — pass the full text to write in the 'content' argument"}
     fpath = _sandbox_path(name)
     fpath.write_text(content, encoding="utf-8")
     return {"written": str(fpath), "bytes": len(content.encode())}
 
 
-@jarvis_tool(name="file_list", tier=AUTO, desc="List files in the JARVIS sandbox")
+@jarvis_tool(name="file_list", tier=AUTO, desc="List files in the JARVIS workspace")
 async def file_list() -> list:
     _SANDBOX.mkdir(parents=True, exist_ok=True)
     return [f.name for f in sorted(_SANDBOX.iterdir()) if f.is_file()]
