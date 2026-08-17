@@ -54,6 +54,9 @@ class SlackListener:
         self._jarvis_channel_id: Optional[str] = None
         self._running = False
         self._client = None
+        # Set by stop(); awaited by start() so shutdown is immediate rather
+        # than waiting out a polling interval.
+        self._stop_event: Optional[asyncio.Event] = None
 
     def set_handler(self, handler: Callable[[str, str], Awaitable[str]]) -> None:
         """
@@ -312,7 +315,18 @@ class SlackListener:
             pass
 
     async def start(self) -> None:
-        """Connect via Socket Mode and listen forever. Safe to cancel."""
+        """
+        Connect via Socket Mode and listen forever. Safe to cancel.
+
+        Idempotent: if a connection is already live this returns immediately
+        rather than opening a second one. Slack hands each event to exactly
+        one connection, so a duplicate would not double-deliver messages, but
+        it would leak a socket that no supervisor owns.
+        """
+        if self._running:
+            log.debug("SlackListener: already connected — ignoring duplicate start().")
+            return
+
         if not self.is_configured():
             log.info(
                 "SlackListener: SLACK_APP_TOKEN not set — two-way Slack disabled. "
@@ -327,49 +341,59 @@ class SlackListener:
             log.error("SlackListener: slack_sdk not installed. Run: pip install slack_sdk aiohttp")
             return
 
-        self._bot_user_id = await self._get_bot_user_id()
-        log.info("SlackListener: bot user ID = %s", self._bot_user_id)
-        self._jarvis_channel_id = await self._resolve_channel_id(
-            os.environ.get("SLACK_JARVIS_CHANNEL", "").lstrip("#")
-        )
-        if self._jarvis_channel_id:
-            log.info("SlackListener: dedicated channel ID = %s", self._jarvis_channel_id)
-
-        web_client = AsyncWebClient(token=_bot_token())
-        socket_client = SocketModeClient(
-            app_token=_app_token(),
-            web_client=web_client,
-        )
-
-        async def _process(client, req):
-            """Acknowledge immediately, then handle async so Slack doesn't time out."""
-            await client.send_socket_mode_response(
-                __import__("slack_sdk.socket_mode.response", fromlist=["SocketModeResponse"])
-                .SocketModeResponse(envelope_id=req.envelope_id)
-            )
-            if req.type == "events_api":
-                asyncio.create_task(self._handle_event(req.payload))
-            elif req.type == "interactive":
-                asyncio.create_task(self._handle_interactive(req.payload))
-
-        socket_client.socket_mode_request_listeners.append(_process)
-
+        # Claim the slot before the first await, so a concurrent start() on the
+        # same loop cannot slip past the guard above while we are connecting.
         self._running = True
-        log.info("SlackListener: connecting via Socket Mode…")
-        await socket_client.connect()
-        log.info("SlackListener: connected. JARVIS is now reachable on Slack.")
+        self._stop_event = asyncio.Event()
+        socket_client = None
 
         try:
-            while self._running:
-                await asyncio.sleep(30)
+            self._bot_user_id = await self._get_bot_user_id()
+            log.info("SlackListener: bot user ID = %s", self._bot_user_id)
+            self._jarvis_channel_id = await self._resolve_channel_id(
+                os.environ.get("SLACK_JARVIS_CHANNEL", "").lstrip("#")
+            )
+            if self._jarvis_channel_id:
+                log.info("SlackListener: dedicated channel ID = %s", self._jarvis_channel_id)
+
+            web_client = AsyncWebClient(token=_bot_token())
+            socket_client = SocketModeClient(
+                app_token=_app_token(),
+                web_client=web_client,
+            )
+
+            async def _process(client, req):
+                """Acknowledge immediately, then handle async so Slack doesn't time out."""
+                await client.send_socket_mode_response(
+                    __import__("slack_sdk.socket_mode.response", fromlist=["SocketModeResponse"])
+                    .SocketModeResponse(envelope_id=req.envelope_id)
+                )
+                if req.type == "events_api":
+                    asyncio.create_task(self._handle_event(req.payload))
+                elif req.type == "interactive":
+                    asyncio.create_task(self._handle_interactive(req.payload))
+
+            socket_client.socket_mode_request_listeners.append(_process)
+
+            log.info("SlackListener: connecting via Socket Mode…")
+            await socket_client.connect()
+            log.info("SlackListener: connected. JARVIS is now reachable on Slack.")
+
+            await self._stop_event.wait()
         except asyncio.CancelledError:
             pass
         finally:
-            await socket_client.close()
-            log.info("SlackListener: disconnected.")
+            self._running = False
+            self._stop_event = None
+            if socket_client is not None:
+                await socket_client.close()
+                log.info("SlackListener: disconnected.")
 
     def stop(self) -> None:
+        """Signal the listener to disconnect. Takes effect immediately."""
         self._running = False
+        if self._stop_event is not None:
+            self._stop_event.set()
 
 
 # Global singleton

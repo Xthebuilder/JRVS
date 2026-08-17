@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import urllib.request
 from typing import Optional
 
@@ -60,27 +61,68 @@ _CHANNEL_KEYWORDS: dict[str, list[str]] = {
 }
 
 
+# Keywords are matched on a leading word boundary but no trailing one, so
+# "email" matches "emails" and "meeting" matches "meetings", while "mail"
+# still does NOT match inside "gmail" or "email" (no boundary mid-word).
+# Each entry is (pattern, weight). A multi-word phrase ("end of day", "job
+# completed") is far more specific than a bare word ("today", "report"), so a
+# single phrase match is worth full evidence on its own.
+_KEYWORD_PATTERNS: dict[str, list[tuple[re.Pattern, int]]] = {
+    channel: [
+        (re.compile(r"\b" + re.escape(kw)), 2 if " " in kw else 1)
+        for kw in keywords
+    ]
+    for channel, keywords in _CHANNEL_KEYWORDS.items()
+}
+
+# Distinct keyword hits needed before a channel is credited with full
+# confidence. One stray word ("today", "report") should not win a channel on
+# its own; two independent terms from the same domain is real evidence.
+_FULL_EVIDENCE_HITS = 2
+
+
 def _confidence_route(text: str) -> tuple[str, float]:
     """
     Score *text* against each channel's keywords.
     Returns (channel_key, confidence) where confidence is in [0, 1].
     Falls back to 'general' if the best score is below the threshold.
+
+    Confidence combines two independent signals rather than one overloaded
+    score. A channel wins only if it satisfies both:
+
+      dominance — how decisively it beat the runner-up, best/(best+second).
+                  Ties give 0.5; an uncontested match gives 1.0.
+      evidence  — the weight of the keywords it matched, capped at
+                  _FULL_EVIDENCE_HITS. Guards against a single common word.
+
+    The earlier version scored hits/len(keywords), i.e. the fraction of a
+    channel's whole vocabulary present in the message. With ~12 keywords per
+    channel and a 0.65 threshold that demanded 8 distinct keywords in one
+    message, so realistic notifications always fell through to 'general'.
     """
     threshold = float(os.environ.get("SLACK_ROUTE_CONFIDENCE", "0.65"))
     lower = text.lower()
 
-    scores: dict[str, float] = {}
-    for channel, keywords in _CHANNEL_KEYWORDS.items():
-        hits = sum(1 for kw in keywords if kw in lower)
-        scores[channel] = hits / len(keywords)
+    hits: dict[str, int] = {
+        channel: sum(weight for pat, weight in patterns if pat.search(lower))
+        for channel, patterns in _KEYWORD_PATTERNS.items()
+    }
 
-    best_channel = max(scores, key=lambda c: scores[c])
-    best_score = scores[best_channel]
+    ranked = sorted(hits.items(), key=lambda kv: kv[1], reverse=True)
+    best_channel, best_hits = ranked[0]
+    runner_up_hits = ranked[1][1] if len(ranked) > 1 else 0
 
-    if best_score < threshold:
-        return "general", best_score
+    if best_hits == 0:
+        return "general", 0.0
 
-    return best_channel, best_score
+    dominance = best_hits / (best_hits + runner_up_hits)
+    evidence = min(1.0, best_hits / _FULL_EVIDENCE_HITS)
+    confidence = dominance * evidence
+
+    if confidence < threshold:
+        return "general", confidence
+
+    return best_channel, confidence
 
 
 def get_channel(key: str) -> str:
