@@ -41,8 +41,22 @@ two people are called Chris IS ambiguous. "Add an event and make it get
 groceries" is ambiguous: "get groceries" could be the event's title or a
 separate task.
 
-Both must be true to ask. Asking needlessly is annoying and slow, so when the
-request has one obvious reading, answer false.
+Never ask about optional extras the request did not mention — inviting people,
+reminders, notifications, locations, durations. Their absence is not ambiguity,
+and the assistant has no tool for most of them. "Dinner with Sam" is the title;
+it is not a question about whether to invite Sam.
+
+A request that already states its title explicitly ("called X", "titled X",
+"named X") together with a date or time has ONE reading. Answer false.
+
+ALWAYS ask when the action is destructive or irreversible — delete, remove,
+cancel, overwrite, send, pay — and the target is not precisely identified.
+"Delete the old files" names no specific files, so it must be questioned. The
+risks are not symmetric: an unnecessary question costs seconds, a wrong
+deletion cannot be undone.
+
+Both must be true to ask. Otherwise, asking needlessly is annoying and slow, so
+when the request has one obvious reading, answer false.
 
 The question must be ONE short sentence offering the likely readings.
 """

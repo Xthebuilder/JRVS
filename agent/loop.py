@@ -130,6 +130,18 @@ def _planner_model() -> "dict[str, str]":
     return {"model": model, "keep_alive": os.environ.get("JRVS_PLANNER_KEEP_ALIVE", "90s")}
 
 
+def _mentions_blocked_domain(goal_text: str) -> bool:
+    """True if the goal plausibly needs a capability that is currently down."""
+    from agent.capabilities import get_capabilities
+    text = (goal_text or "").lower()
+    for cap in get_capabilities():
+        if cap.available or cap.alternative:
+            continue   # an alternative exists, so this is not a hard limit
+        if any(word in text for word in cap.name.lower().split()):
+            return True
+    return False
+
+
 def _now_str() -> str:
     """Current local date/time for the planner prompt.
 
@@ -257,7 +269,10 @@ class AgentLoop:
             return GoalResult(goal_id=goal_id, run_id=run_id, status="failed", error=str(exc))
 
         if not plan:
-            blocked = describe_for_prompt()
+            # Only attribute an empty plan to a capability limit when the goal
+            # actually mentions that capability's domain. Otherwise every empty
+            # plan gets blamed on whatever happens to be unconfigured.
+            blocked = describe_for_prompt() if _mentions_blocked_domain(goal_text) else ""
             if blocked:
                 # The planner was told to return nothing rather than substitute a
                 # different kind of action, so report the boundary honestly.
@@ -813,17 +828,41 @@ def _resolve_args(args: dict[str, Any], step_results: dict[int, Any]) -> dict[st
       [Results from step N]
       [result_from_step_N]
     """
+    # An optional accessor path lets a plan reach into a prior result —
+    # <result_from_step_1[0].id> — which planners reach for naturally and which
+    # previously failed the whole step as an "unresolved placeholder".
+    _ACCESSOR = r"((?:\[\d+\]|\.[A-Za-z_][A-Za-z0-9_]*)*)"
     _PLACEHOLDER = re.compile(
-        r"<result_from_step_(\d+)>"
+        r"<result_from_step_(\d+)" + _ACCESSOR + r">"
         r"|\[(?:Search\s+)?Results?\s+from\s+[Ss]tep\s+(\d+)\]"
         r"|\[result_from_step_(\d+)\]"
         r"|\{result_from_step_(\d+)\}",
         re.IGNORECASE,
     )
 
+    def _walk(value: Any, path: str) -> Any:
+        """Apply an accessor path like "[0].id" to a step result."""
+        for token in re.findall(r"\[(\d+)\]|\.([A-Za-z_][A-Za-z0-9_]*)", path or ""):
+            index, attr = token
+            if index:
+                if not isinstance(value, (list, tuple)):
+                    raise ValueError(f"cannot index {type(value).__name__} with [{index}]")
+                value = value[int(index)]
+            elif attr:
+                if isinstance(value, dict):
+                    if attr not in value:
+                        raise ValueError(f"result has no field {attr!r}")
+                    value = value[attr]
+                else:
+                    value = getattr(value, attr)
+        return value
+
     def _sub(match: re.Match) -> str:
-        n = int(next(g for g in match.groups() if g is not None))
-        raw = step_results.get(n, match.group(0))
+        groups = match.groups()
+        n = int(next(g for g in (groups[0], groups[2], groups[3], groups[4]) if g is not None))
+        if n not in step_results:
+            return match.group(0)   # left unresolved; caught by the guard below
+        raw = _walk(step_results[n], groups[1] if groups[0] is not None else "")
         if isinstance(raw, (list, dict)):
             import json
             return json.dumps(raw, ensure_ascii=False)

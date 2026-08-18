@@ -63,9 +63,26 @@ async def _verify_nextcloud_create(args: dict, result: Any) -> tuple[bool, str]:
     from jrvs.nextcloud.caldav_client import CalDAVClient
     import asyncio
     client = CalDAVClient()
-    event = await asyncio.get_event_loop().run_in_executor(
-        None, lambda: client.get_event(result["id"])
-    )
+    loop = asyncio.get_event_loop()
+
+    def _lookup() -> Optional[dict]:
+        # event_by_uid raises rather than returning None, and can miss a record
+        # that is present moments after a create. A lookup miss is not proof of
+        # absence, so fall back to searching by summary before failing — a false
+        # "did not take effect" on correct work is its own kind of lie.
+        try:
+            return client.get_event(result["id"])
+        except Exception as exc:
+            log.debug("verify: uid lookup failed (%s) — falling back to search", exc)
+        try:
+            for candidate in client.find_events(str(args.get("summary") or "")) or []:
+                if _norm(candidate.get("summary")) == _norm(args.get("summary")):
+                    return candidate
+        except Exception as exc:
+            log.debug("verify: summary search failed: %s", exc)
+        return None
+
+    event = await loop.run_in_executor(None, _lookup)
     if not event:
         return False, f"event {result['id']} is not on the calendar after create"
 

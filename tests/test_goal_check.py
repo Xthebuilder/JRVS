@@ -141,3 +141,26 @@ class TestPlaceholderLeakage:
     def test_real_reference_still_resolves(self):
         from agent.loop import _resolve_args
         assert _resolve_args({"summary": "<result_from_step_1>"}, {1: "Lunch"}) == {"summary": "Lunch"}
+
+
+class TestPlaceholderAccessors:
+    """A plan legitimately reaches into a prior result: <result_from_step_1[0].id>."""
+
+    def test_index_then_attribute(self):
+        from agent.loop import _resolve_args
+        out = _resolve_args({"event_id": "<result_from_step_1[0].id>"}, {1: [{"id": "abc-123"}]})
+        assert out == {"event_id": "abc-123"}
+
+    def test_attribute_only(self):
+        from agent.loop import _resolve_args
+        assert _resolve_args({"x": "<result_from_step_2.id>"}, {2: {"id": "xyz"}}) == {"x": "xyz"}
+
+    def test_reference_to_a_step_with_no_result_is_caught(self):
+        from agent.loop import _resolve_args
+        with pytest.raises(ValueError, match="unresolved step placeholder"):
+            _resolve_args({"x": "<result_from_step_9>"}, {1: "only step one ran"})
+
+    def test_missing_field_is_reported_not_silently_empty(self):
+        from agent.loop import _resolve_args
+        with pytest.raises(ValueError):
+            _resolve_args({"x": "<result_from_step_1.nope>"}, {1: {"id": "a"}})

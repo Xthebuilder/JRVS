@@ -25,13 +25,18 @@ _TTL_SECONDS = 120
 
 
 class Capability:
-    __slots__ = ("name", "available", "reason", "tool_prefixes")
+    __slots__ = ("name", "available", "reason", "tool_prefixes", "alternative")
 
-    def __init__(self, name: str, available: bool, reason: str, tool_prefixes: tuple[str, ...]):
+    def __init__(self, name: str, available: bool, reason: str,
+                 tool_prefixes: tuple[str, ...], alternative: str = ""):
         self.name = name
         self.available = available
         self.reason = reason
         self.tool_prefixes = tool_prefixes
+        # What DOES work for this kind of task. Without it the planner reads
+        # "calendar_* unavailable" as "calendar work is impossible" and gives
+        # up, even though nextcloud_* does exactly that job.
+        self.alternative = alternative
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid
         return f"Capability({self.name}, available={self.available}, reason={self.reason!r})"
@@ -45,6 +50,12 @@ def _probe_google() -> Capability:
         "Google Workspace", False,
         "not authenticated — run /google-auth to connect Gmail, Docs, Sheets and Google Calendar",
         ("gmail_", "docs_", "sheets_", "calendar_"),
+        alternative=(
+            "for CALENDAR work use the nextcloud_* tools, which are available and "
+            "fully working — nextcloud_create puts an event on the user's calendar. "
+            "For notes and documents use file_write. There is no alternative for "
+            "sending email."
+        ),
     )
 
 
@@ -111,13 +122,16 @@ def describe_for_prompt() -> str:
     missing = [c for c in get_capabilities() if not c.available]
     if not missing:
         return ""
-    lines = ["UNAVAILABLE RIGHT NOW — do not plan these, and do NOT substitute a different kind of tool:"]
+    lines = ["UNAVAILABLE RIGHT NOW — these specific tools will fail, do not plan them:"]
     for cap in missing:
         tools = ", ".join(f"{p}*" if not p.endswith("*") else p for p in cap.tool_prefixes)
         lines.append(f"  {cap.name} ({tools}) — {cap.reason}")
+        if cap.alternative:
+            lines.append(f"    HOWEVER: {cap.alternative}")
     lines.append(
-        "If the user's request REQUIRES one of these, do not improvise an alternative: "
-        "writing a file is not sending mail and is not creating an appointment. Return an "
-        "empty plan so the limit is reported honestly."
+        "Use the working alternative above whenever one exists — that is the right plan, "
+        "not a compromise. Only when NO tool can do the requested KIND of work should you "
+        "return an empty plan: never substitute a different kind of action, because writing "
+        "a file is not sending an email."
     )
     return "\n".join(lines)

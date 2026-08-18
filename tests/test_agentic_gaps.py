@@ -39,8 +39,26 @@ class TestCapabilities:
         monkeypatch.setattr(capabilities, "_CACHE", {})
         monkeypatch.setattr(Path, "home", staticmethod(lambda: Path("/nonexistent-home")))
         text = capabilities.describe_for_prompt().lower()
-        assert "do not substitute" in text
-        assert "writing a file is not sending mail" in text
+        assert "never substitute a different kind of action" in text
+        assert "writing a file is not sending an email" in text
+
+    def test_prompt_names_the_working_alternative(self, monkeypatch):
+        """
+        Regression: told only that calendar_* was unavailable, the planner
+        concluded calendar work was impossible and returned an empty plan —
+        never noticing nextcloud_* does exactly that job.
+        """
+        monkeypatch.setattr(capabilities, "_CACHE", {})
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: Path("/nonexistent-home")))
+        text = capabilities.describe_for_prompt()
+        assert "nextcloud_" in text
+        assert "HOWEVER" in text
+
+    def test_email_has_no_alternative_offered(self, monkeypatch):
+        """Substituting a file for an email is exactly what we are preventing."""
+        monkeypatch.setattr(capabilities, "_CACHE", {})
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: Path("/nonexistent-home")))
+        assert "no alternative for" in capabilities.describe_for_prompt().lower()
 
     def test_unavailable_prefixes_cover_the_google_tools(self, monkeypatch):
         monkeypatch.setattr(capabilities, "_CACHE", {})
