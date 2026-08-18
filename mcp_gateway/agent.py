@@ -50,12 +50,143 @@ _TOOL_KEYWORDS = frozenset({
     # browser automation / puppeteer
     "screenshot", "navigate", "webpage", "visit", "page", "browser",
     "puppeteer", "click", "fill", "form", "render", "scrape",
+    # video downloading (mp4-downloader)
+    "video", "videos", "youtube", "clip", "clips", "watch", "grab",
+    "rip", "playlist", "mp4", "stream", "subtitle", "subtitles",
     # generic action verbs on external data
     "check", "analyze", "analyse", "scan", "monitor", "upload",
     "get", "set", "update", "deploy", "build",
+    # live information — facts that go stale, so they always need a lookup.
+    # Without these the fast path answers from training data and invents a
+    # confident-sounding number. Deliberately concrete nouns: bare time words
+    # like "today" or "now" would fire on small talk and cost a round-trip.
+    "weather", "forecast", "temperature", "humidity", "rain", "snow",
+    "news", "headline", "headlines", "price", "prices", "stock", "stocks",
+    "score", "scores", "who won", "latest", "current", "currently",
+    "right now", "happening", "open now", "exchange rate",
     # workspace / documents
     "workspace", "project", "document", "spreadsheet", "sheet",
 })
+
+# ── Per-server keywords, used to pre-filter the catalogue ────────────────────
+# Sending every tool's full JSON schema to the model costs ~16k tokens, which
+# blows OLLAMA_NUM_CTX (4096) and makes Ollama reject the request outright with
+# HTTP 400 — analysis then returns None and *every* tool silently goes unused.
+# Only servers whose keywords appear in the message get sent.
+_SERVER_KEYWORDS: Dict[str, frozenset] = {
+    "filesystem": frozenset({
+        "file", "files", "read", "write", "open", "save", "create", "delete",
+        "remove", "move", "copy", "rename", "directory", "folder", "path",
+        "edit", "list", "ls", "contents", "config", "workspace", "document",
+    }),
+    "sqlite": frozenset({
+        "database", "db", "sqlite", "sql", "query", "table", "tables", "row",
+        "rows", "select", "insert", "schema", "records",
+    }),
+    "github": frozenset({
+        "github", "repo", "repository", "commit", "commits", "pull request",
+        "pr", "issue", "issues", "branch", "merge", "fork", "clone",
+    }),
+    "sequential-thinking": frozenset({
+        "think", "reason", "plan", "step by step", "break down", "brainstorm",
+        "figure out", "work through",
+    }),
+    "brave-search": frozenset({
+        "search", "google", "look up", "lookup", "find", "news", "headline",
+        "headlines", "web", "online", "internet", "latest", "current",
+        "today", "recent", "who is", "what is", "weather", "price",
+    }),
+    "puppeteer": frozenset({
+        "screenshot", "navigate", "webpage", "visit", "page", "browser",
+        "puppeteer", "click", "fill", "form", "render", "scrape", "url",
+        "website", "http", "https", "browse",
+    }),
+    "slack": frozenset({
+        "slack", "channel", "channels", "dm", "message", "post", "send",
+        "thread", "reply",
+    }),
+    "mp4-downloader": frozenset({
+        "video", "videos", "youtube", "clip", "clips", "watch", "download",
+        "grab", "rip", "playlist", "mp4", "stream", "subtitle", "subtitles",
+    }),
+}
+
+# Description text is truncated to this many chars per tool in the catalogue.
+_MAX_TOOL_DESC_CHARS = 100
+
+# Scaffolding (rules block, system prompt, user message) plus room for the
+# JSON reply, in tokens. The catalogue gets whatever is left of num_ctx.
+_ANALYSIS_OVERHEAD_TOKENS = 1800
+_MIN_CATALOG_TOKENS = 800
+
+
+def _rank_servers(message: str, servers: List[str]) -> List[str]:
+    """Rank servers by how many of their keywords appear in the message.
+
+    Servers with no keyword hit are dropped. If nothing matches, every server
+    is returned unranked — the budget cap in _build_tool_catalog is then the
+    only thing keeping the prompt inside the context window.
+    """
+    msg_lower = message.lower()
+    scored = []
+    for server in servers:
+        keywords = _SERVER_KEYWORDS.get(server)
+        if keywords is None:
+            # Unknown server (config changed without updating the map) — keep it,
+            # ranked last, so a new server is never silently unreachable.
+            scored.append((0.5, server))
+            continue
+        hits = sum(1 for kw in keywords if kw in msg_lower)
+        if hits:
+            scored.append((hits, server))
+
+    if not scored:
+        return list(servers)
+
+    scored.sort(key=lambda pair: pair[0], reverse=True)
+    return [server for _, server in scored]
+
+
+def _build_tool_catalog(all_tools: Dict[str, List[Dict]], servers: List[str]) -> List[Dict]:
+    """Build a slimmed tool catalogue for the ranked servers, within budget.
+
+    Parameter *names* replace full JSON schemas and descriptions are truncated;
+    together that cuts the catalogue by roughly 70%. Servers are added in rank
+    order and the loop stops once the budget is spent, so the request can never
+    exceed the context window no matter how many MCP servers are connected.
+    """
+    from config import OLLAMA_NUM_CTX
+
+    budget_tokens = max(OLLAMA_NUM_CTX - _ANALYSIS_OVERHEAD_TOKENS, _MIN_CATALOG_TOKENS)
+    budget_chars = budget_tokens * 4
+
+    catalog: List[Dict] = []
+    used_chars = 0
+
+    for server in servers:
+        entries = []
+        for tool in all_tools.get(server, []):
+            schema = tool.get("input_schema") or {}
+            entries.append({
+                "server": server,
+                "name": tool["name"],
+                "desc": (tool.get("description") or "")[:_MAX_TOOL_DESC_CHARS],
+                "params": list(schema.get("properties", {}).keys()),
+                "required": schema.get("required", []),
+            })
+
+        server_chars = len(json.dumps(entries))
+        if catalog and used_chars + server_chars > budget_chars:
+            log.debug(
+                "Tool catalogue budget reached — dropping %s and lower-ranked servers",
+                server,
+            )
+            break
+
+        catalog.extend(entries)
+        used_chars += server_chars
+
+    return catalog
 
 
 @dataclass
@@ -122,18 +253,19 @@ class MCPAgent:
 
         all_tools = await mcp_client.list_all_tools()
 
-        tool_catalog = []
-        for server, tools in all_tools.items():
-            for tool in tools:
-                tool_catalog.append({
-                    "server": server,
-                    "name": tool["name"],
-                    "description": tool.get("description", ""),
-                    "params": tool.get("input_schema", {})
-                })
+        # Only send servers the message plausibly needs, slimmed and capped to
+        # fit num_ctx. The full catalogue is ~16k tokens and gets rejected.
+        ranked = _rank_servers(user_message, list(all_tools.keys()))
+        tool_catalog = _build_tool_catalog(all_tools, ranked)
 
         if not tool_catalog:
             return {"needs_tools": False, "reasoning": "No MCP tools available"}
+
+        log.debug(
+            "Tool analysis: %d tool(s) from %s",
+            len(tool_catalog),
+            ", ".join(dict.fromkeys(t["server"] for t in tool_catalog)),
+        )
 
         analysis_prompt = f"""User Request: "{user_message}"
 
@@ -155,7 +287,8 @@ Analyse the request and respond with JSON:
 }}
 
 CRITICAL RULES:
-1. Use ONLY parameter names that appear in the tool's input schema above. Never invent parameters.
+1. Each tool lists its accepted parameter names in "params" and its mandatory ones in "required".
+   Use ONLY names from "params", and always supply every name in "required". Never invent parameters.
 2. For puppeteer (browser/screenshot/webpage tasks), you MUST call tools in this exact order:
    a. First: puppeteer/puppeteer_navigate with {{"url": "https://..."}}
    b. For screenshots: puppeteer/puppeteer_screenshot with {{"name": "descriptive_name"}}
@@ -166,7 +299,11 @@ CRITICAL RULES:
 4. Database queries → sqlite tools
 5. GitHub tasks → github tools
 6. Thinking through complex problems → sequential-thinking tools
-7. Just conversation → no tools needed
+7. Downloading/saving a video from a link → mp4-downloader/download_video with {{"urls": "https://..."}}.
+   Finding videos the user cannot link to → mp4-downloader/search_videos with {{"query": "..."}} — it returns
+   candidates only, so present them and let the user choose before downloading. Do NOT use puppeteer or
+   scraping tools to download videos; mp4-downloader handles the extraction itself.
+8. Just conversation → no tools needed
 
 Respond ONLY with valid JSON."""
 

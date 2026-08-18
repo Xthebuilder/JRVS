@@ -25,7 +25,11 @@ from llm.ollama_client import ollama_client
 from rag.retriever import rag_retriever
 from core.database import db
 from core.calendar import calendar
-from core.calendar_parser import parse_calendar_request
+from core.calendar_parser import (
+    parse_calendar_request,
+    build_calendar_grounding,
+    format_event_confirmation,
+)
 from scraper.web_scraper import web_scraper
 import re
 from config import (
@@ -291,6 +295,13 @@ async def chat(request: ChatRequest):
             )
             rag_span.metadata["context_len"] = len(context) if context else 0
 
+        # Tell the model what the calendar tool actually did. Without this it
+        # cannot distinguish "event created" from "parser declined" and will
+        # fabricate a confirmation for anything that sounds like a request.
+        grounding = build_calendar_grounding(request.message, cal, event_id)
+        if grounding:
+            context = f"{context}\n\n{grounding}" if context else grounding
+
         # Use a spoken-language system prompt for voice requests
         sys_prompt = _build_voice_system_prompt() if request.voice else None
 
@@ -305,9 +316,9 @@ async def chat(request: ChatRequest):
             )
             llm_span.metadata["response_len"] = len(response) if response else 0
 
-        # If we created an event, prepend confirmation to response
+        # If we created an event, prepend the authoritative confirmation
         if event_id:
-            response = f"\u2713 I've created that event for you (Event #{event_id}).\n\n" + response
+            response = format_event_confirmation(cal, event_id) + "\n\n" + response
 
         if not response:
             raise HTTPException(status_code=500, detail="Failed to generate response")
@@ -417,6 +428,12 @@ async def websocket_chat(websocket: WebSocket):
 
             # Get context and generate response with history from unified store
             context = await rag_retriever.retrieve_context(message, session_id)
+
+            # Ground the model in what the calendar tool actually did
+            grounding = build_calendar_grounding(message, cal, event_id)
+            if grounding:
+                context = f"{context}\n\n{grounding}" if context else grounding
+
             recent_history = await session_store.get_recent_as_pairs(session_id)
             response = await ollama_client.generate(
                 prompt=message,
@@ -427,7 +444,7 @@ async def websocket_chat(websocket: WebSocket):
 
             if response:
                 if event_id:
-                    response = f"\u2713 I've created that event for you (Event #{event_id}).\n\n" + response
+                    response = format_event_confirmation(cal, event_id) + "\n\n" + response
 
                 # Send in chunks for streaming effect
                 for i in range(0, len(response), 20):

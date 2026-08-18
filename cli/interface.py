@@ -49,8 +49,13 @@ class JarvisCLI:
         self._llm_router = None
         self._trigger_hub = None
 
-    async def initialize(self):
-        """Initialize all components"""
+    async def initialize(self, start_slack: bool = True):
+        """Initialize all components.
+
+        start_slack=False wires the Slack handler up but leaves the connection
+        to the caller. The daemon uses this so it can run the listener under
+        its supervisor instead of a fire-and-forget task.
+        """
         theme.print_status("Initializing Jarvis AI Agent...", "info")
 
         try:
@@ -125,8 +130,11 @@ class JarvisCLI:
             from core.slack_listener import slack_listener
             if slack_listener.is_configured():
                 slack_listener.set_handler(self.handle_chat_message_for_slack)
-                asyncio.create_task(slack_listener.start())
-                theme.print_success("Slack two-way messaging active (Socket Mode)")
+                if start_slack:
+                    asyncio.create_task(slack_listener.start())
+                    theme.print_success("Slack two-way messaging active (Socket Mode)")
+                else:
+                    theme.print_info("Slack handler wired — connection owned by the daemon")
             else:
                 theme.print_info("Slack listener inactive — add SLACK_APP_TOKEN to .env to enable")
 
@@ -336,6 +344,19 @@ class JarvisCLI:
                 lines.append(f"  • {server}: {tool_names}")
         else:
             lines.append("\n\nNo MCP servers are currently connected.")
+
+        # This block is sent on every message now, greetings included. Without
+        # explicit framing the model treats the capability list as a script to
+        # recite — or as a prompt to volunteer everything missing from it.
+        lines.append(
+            "\n\nHow to use the list above: it is reference material, not a script."
+            "\nNever recite it, summarise it, or volunteer what you cannot do."
+            "\nOn greetings and small talk, just talk — don't mention tools at all."
+            "\nWhen asked what you can do, answer in a sentence or two about what's"
+            " actually relevant to the user, not an inventory."
+            "\nNever claim you lack web access, live information, or a knowledge"
+            " cutoff. You have live web search, and the current date is in your prompt."
+        )
 
         return "".join(lines)
 
@@ -555,6 +576,53 @@ class JarvisCLI:
         # Unhandled command — fall back to LLM
         return None
 
+
+    @staticmethod
+    def _ground_calendar_request(message: str) -> str:
+        """Resolve dates/times with the parser before the planner ever sees them.
+
+        core/calendar_parser.py resolves "tomorrow at 6pm" exactly and
+        deterministically. Two LLM hops did not: decomposition turned it into
+        "create an all-day event" and the hour was lost. Regex owns the
+        mechanical facts, the model owns intent and orchestration — so the
+        resolved values are pinned into the goal text rather than recomputed.
+
+        Returns the message unchanged when it is not a calendar-create request.
+        """
+        try:
+            from core.calendar_parser import has_create_intent, parse_calendar_request
+            if not has_create_intent(message):
+                return message
+            parsed = parse_calendar_request(message)
+            if not parsed or not parsed.get("event_date"):
+                return message
+
+            from datetime import timedelta
+            start = parsed["event_date"]
+            end = start + timedelta(hours=1)
+            # The parser keeps the title marker itself ("called dinner with sam"
+            # -> "Called dinner with sam"), which then becomes the event name.
+            # Trimmed here rather than in the parser, which is being edited
+            # elsewhere.
+            import re as _re
+            title = str(parsed.get("title") or "").strip()
+            title = _re.sub(r"^(?:called|titled|named|about|for)\s+", "", title, flags=_re.I).strip()
+            title = title[:1].upper() + title[1:] if title else "Event"
+
+            note = [
+                "",
+                "[RESOLVED — use these exact values, do not recompute the date or time]",
+                f"summary: {title}",
+                f"start: {start.strftime('%Y-%m-%dT%H:%M:%S')}",
+                f"end: {end.strftime('%Y-%m-%dT%H:%M:%S')}",
+            ]
+            if not parsed.get("time_explicit"):
+                note.append("(the time was assumed — mention that when confirming)")
+            return message + "\n" + "\n".join(note)
+        except Exception as exc:  # never let grounding break the request
+            logger.debug("_ground_calendar_request: %s", exc)
+            return message
+
     async def handle_chat_message_for_slack(self, message: str, session_id: str, label_source: bool = True) -> str:
         """
         Full JARVIS chat pipeline for Slack messages.
@@ -584,10 +652,34 @@ class JarvisCLI:
             # ── Ad-hoc task routing ───────────────────────────────────────
             # If the message looks like a multi-step action request, send it
             # directly to AgentLoop rather than the chat path.
+            # An answer to a question we already asked: fold it into the parked
+            # request and run that, instead of treating it as a new instruction.
+            from agent import clarify as _clarify
+            parked = _clarify.take_pending(session_id)
+            if parked:
+                import uuid
+                merged = self._ground_calendar_request(_clarify.combine(parked, message))
+                logger.info("Slack: resuming parked request with clarification")
+                return await self._run_goal_for_slack(f"adhoc_{uuid.uuid4().hex[:8]}", merged)
+
             if await _needs_agent_loop(message, self.llm_client):
                 import uuid
+                # Ask before acting when the request genuinely reads two ways.
+                # Guessing here is how a helpful assistant does the wrong thing
+                # confidently and irreversibly.
+                from agent.loop import _planner_model
+                should_ask, question = await _clarify.needs_clarification(
+                    message, self.llm_client, planner_kwargs=_planner_model(),
+                )
+                if should_ask:
+                    _clarify.park(session_id, message)
+                    logger.info("Slack: asking for clarification instead of guessing")
+                    return f":raising_hand: {question}"
+
                 adhoc_id = f"adhoc_{uuid.uuid4().hex[:8]}"
-                return await self._run_goal_for_slack(adhoc_id, message)
+                return await self._run_goal_for_slack(
+                    adhoc_id, self._ground_calendar_request(message)
+                )
 
             # Intent router — same routing as normal chat
             from cli.intent_router import detect_command_intent
@@ -635,10 +727,12 @@ class JarvisCLI:
 
             recent_history = await session_store.get_recent_as_pairs(session_id)
 
-            # For pure conversation use the base identity only — the full capabilities
-            # system prompt causes the LLM to volunteer what it can't do even on greetings
-            from config import _build_system_prompt as _base_prompt
-            sys_prompt = _base_prompt() if is_conversational else self._system_prompt
+            # Always send the full capabilities prompt. Swapping in the bare identity
+            # for short messages meant capability questions ("can you go on the web")
+            # were answered from base-model priors — JARVIS denied having web search it
+            # actually has. The greeting-disclaimer problem that motivated the swap is
+            # handled in the prompt text itself now (see _build_system_prompt).
+            sys_prompt = self._system_prompt
 
             # Tell JARVIS to label his source in Slack so the user knows whether the
             # answer comes from memory, live tools, or training data. Only applies
@@ -652,6 +746,27 @@ class JarvisCLI:
                     "- If the answer comes from RAG/memory context provided above: start with 'From what I know from memory, ...'\n"
                     "- If answering from training data only (no context or tools): start with 'From my general knowledge, ...'\n"
                     "Keep the label natural — weave it into the first sentence, don't just paste it robotically."
+                )
+
+            # Safety net for the chat path. _needs_agent_loop fails closed to chat
+            # on timeout, parse failure, or an "unsure" verdict, so an action
+            # request can land here with nothing having run. Left alone the model
+            # answers "The file has been saved" and claims work it never did —
+            # worse than an error, because the user believes it. Only applied when
+            # the message looked actionable AND no tool actually succeeded, so
+            # ordinary conversation and real tool-backed answers keep their voice.
+            executed_a_tool = any(
+                tr.get("success") for tr in (agent_result.get("tool_results") or [])
+            )
+            if not executed_a_tool and any(h in message.lower() for h in _ACTIONABLE_HINTS):
+                sys_prompt = (sys_prompt or "") + (
+                    "\n\nCRITICAL — you are answering in conversation mode and have NOT run "
+                    "any tool for this message. You have not created, written, saved, sent, "
+                    "scheduled, updated or deleted anything. Never state or imply that you "
+                    "have. If the user asked for such an action, say plainly that it is not "
+                    "done yet and offer to do it — for example \"I haven't saved that yet — "
+                    "want me to?\". Reporting an action as complete when it never ran is the "
+                    "worst answer you can give."
                 )
 
             response = await self.llm_client.generate(
@@ -1687,7 +1802,7 @@ class JarvisCLI:
 
     async def _try_parse_calendar_request(self, message: str) -> bool:
         """Try to parse natural language calendar requests using the shared parser."""
-        from core.calendar_parser import parse_calendar_request
+        from core.calendar_parser import parse_calendar_request, describe_assumptions
 
         parsed = parse_calendar_request(message)
         if parsed is None:
@@ -1696,6 +1811,9 @@ class JarvisCLI:
         event_id = await calendar.add_event(parsed["title"], parsed["event_date"])
         theme.print_success(f"Event #{event_id} added: {parsed['title']}")
         theme.print_info(f"  {parsed['event_date'].strftime('%A, %B %d, %Y at %I:%M %p')}")
+        assumptions = describe_assumptions(parsed)
+        if assumptions:
+            theme.print_warning(f"  I {assumptions} — say the word to change it.")
         return True
 
     # ------------------------------------------------------------------
@@ -2078,14 +2196,22 @@ Answer with valid JSON only — no markdown, no explanation:
 {{"multi_step": true | false}}
 
 multi_step=true when fulfilling the message requires JARVIS to actually DO
-something with the tools above — especially when it takes more than one step,
-or one step whose result feeds another (fetch then save, search then email,
-read then summarise into a document).
+something with the tools above. This includes a SINGLE action — creating,
+writing, saving, sending, scheduling, updating, or deleting anything is
+always true, even when it takes just one step. It also covers steps that
+feed each other (fetch then save, search then email, read then summarise).
 
-multi_step=false for conversation, questions answerable from knowledge or
-memory, opinions, greetings, and requests for a single short factual lookup.
+multi_step=false ONLY when the message can be fully answered with words:
+conversation, opinions, greetings, explanations, and questions answerable
+from knowledge or memory.
 
-When unsure, answer false.
+The test is not how many steps it takes — it is whether answering in words
+alone would leave the user's request unfulfilled. If the user asked for
+something to exist or change in the world, answer true.
+
+When unsure, answer true: running the planner needlessly is recoverable,
+but replying in words to an action request means JARVIS claims to have done
+something it never did.
 """
 
 # Any of these appearing anywhere earns a classification call; a message with

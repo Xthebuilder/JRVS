@@ -44,7 +44,7 @@ async def _init_with_backoff(cli, max_attempts=INIT_RETRY_LIMIT) -> None:
     while True:
         attempt += 1
         try:
-            ok = await cli.initialize()
+            ok = await cli.initialize(start_slack=False)
             if ok:
                 return
             # initialize() returned False — component not ready
@@ -138,16 +138,10 @@ async def main() -> None:
     log.info("API server running on %s:%d (supervised)", JRVS_SERVER_HOST, JRVS_SERVER_PORT)
 
     # --- Slack listener ---
-    # Slack is already started inside cli.initialize() via asyncio.create_task().
-    # We replace that fire-and-forget task with a supervised one.
+    # cli.initialize(start_slack=False) wired the handler but deliberately did
+    # not connect, so the only connection is the supervised one below.
     from core.slack_listener import slack_listener
     if slack_listener.is_configured():
-        # Stop the un-supervised task that cli.initialize() launched, then
-        # re-launch under supervision. slack_listener.start() is idempotent —
-        # it checks self._running and returns quickly if already connected.
-        slack_listener.stop()
-        await asyncio.sleep(0.5)   # let the old task notice _running=False
-
         supervised_tasks.append(
             asyncio.create_task(
                 _supervise("slack-listener", slack_listener.start),

@@ -57,6 +57,14 @@
         "SLACK_TEAM_ID": "$SLACK_TEAM_ID"
       },
       "description": "Slack — read channels, post messages, search workspace. See _setup_instructions."
+    },
+    "mp4-downloader": {
+      "command": "$JRVS_DIR/venv/bin/python",
+      "args": ["~/mp4-downloader/mcp_server.py"],
+      "env": {
+        "MP4DL_URL": "http://100.121.98.97:8766"
+      },
+      "description": "Video downloader — search the web for videos and download them from any URL (YouTube, Reddit, tube sites, galleries). Use for any 'download/save/grab/rip that video' request. Files are saved on the downloader host, not locally."
     }
   },
   "_disabled_servers": {
@@ -126,6 +134,33 @@
         "3. Install to Workspace → copy xoxb-... token",
         "4. Get Team ID from app.slack.com/client/TXXXXXXX/...",
         "5. Paste both into the slack env fields above, restart JRVS"
+      ]
+    },
+    "mp4-downloader": {
+      "status": "READY — tested end to end (search, inspect, real download, library listing)",
+      "tools": [
+        "downloader_status", "inspect_request", "search_videos", "download_video",
+        "check_job", "list_jobs", "cancel_job", "list_downloads", "check_site_support"
+      ],
+      "how_it_works": [
+        "Thin MCP wrapper over the mp4-downloader web UI's HTTP API (~/mp4-downloader/webui.py).",
+        "The web UI must be running: systemctl --user status mp4-webui.service",
+        "Downloads land in ~/mp4-downloader/downloads ON THE DOWNLOADER HOST and appear in its web UI.",
+        "MP4DL_URL is the tailnet address; the server falls back to http://127.0.0.1:8766 automatically."
+      ],
+      "usage_notes": [
+        "Ambiguous request? Call inspect_request first — it says whether the text is a link (download) or a question (search).",
+        "search_videos returns candidates only and downloads nothing. Show them, let the user pick, then call download_video.",
+        "Downloads outliving wait_seconds is normal — status stays 'running' and a job_id comes back. Poll check_job; never restart the download.",
+        "search_videos needs Ollama up, since the search plan is built by the local model."
+      ],
+      "example_prompts": [
+        "Download this video: https://www.youtube.com/watch?v=...",
+        "Grab that YouTube link at 1080p",
+        "Find me skateboard fail compilations longer than 5 minutes, then download the best one",
+        "Is anything still downloading?",
+        "What videos do I already have saved?",
+        "Can you download from this site? https://example.com/some/page"
       ]
     },
     "puppeteer": {
