@@ -317,10 +317,21 @@ class OllamaClient:
             log.error("generate_tokens error: %s", exc)
 
     async def chat(self, messages: List[Dict[str, str]], model: Optional[str] = None,
-                   stream: bool = True) -> Optional[str]:
-        """Direct chat interface — pass your own messages array"""
+                   stream: bool = True, keep_alive: Optional[str] = None) -> Optional[str]:
+        """Direct chat interface — pass your own messages array.
+
+        keep_alive controls how long ollama holds the model in VRAM after the
+        call. This path used to omit it entirely, so a one-off planning call on
+        a big model squatted on the GPU for ollama's default window and starved
+        the small model that serves chat and tool execution. Callers that borrow
+        a heavy model for a single call should pass "0" to hand the VRAM back
+        immediately.
+        """
         model = model or self.current_model
-        request_data = {"model": model, "messages": messages, "stream": stream}
+        request_data = {
+            "model": model, "messages": messages, "stream": stream,
+            "keep_alive": keep_alive if keep_alive is not None else OLLAMA_KEEP_ALIVE,
+        }
         if stream:
             return await self._chat_streaming(request_data)
         return await self._chat_non_streaming(request_data)

@@ -34,6 +34,7 @@ from typing import Any, Callable, Awaitable, Optional
 from agent.approvals import ApprovalCoordinator
 from agent.scheduling import next_ready_batch
 from agent.tool_registry import tool_registry, CONFIRM, NOTIFY, AUTO, BLOCKED, max_tier
+from agent.verification import verify_action, VERIFIED, FAILED, UNVERIFIED
 from llm.protocol import LLMBackend
 
 log = logging.getLogger(__name__)
@@ -43,6 +44,13 @@ MAX_RETRIES  = 3
 
 _PLANNER_SYSTEM = """\
 You are JARVIS, an autonomous AI assistant.
+
+Right now it is {today}.
+Resolve every relative date against that — "tomorrow", "tonight", "next Friday",
+"in an hour". Never guess a date from memory: without this line the planner has
+no idea what day it is and silently books events years in the past. Write dates
+as ISO 8601 with the time included, e.g. 2026-08-18T18:00:00 for 6pm tomorrow.
+Only use a date-only value when the user actually asked for an all-day event.
 
 Break the user's goal into an ordered list of tool calls.
 
@@ -72,10 +80,53 @@ Rules:
 5. Keep plans concise — 10 steps max.
 6. NEVER invent tools not in the list above.
 7. Google tools (gmail_*, docs_*, sheets_*, calendar_*) require OAuth credentials.
-   If credentials are not available, use file_write/file_read instead of docs_create/docs_append.
-   Do NOT retry a Google tool that has already failed — use a local alternative.
-8. file_write saves to ~/jrvs-workspace/ — use it for any "save to file" task.
+   Do NOT retry a Google tool that has already failed — use the local alternative
+   for that same kind of work: nextcloud_* for anything calendar, file_write for
+   documents and notes.
+8. CALENDAR WORK USES THE nextcloud_* TOOLS. To put an event on the calendar you
+   MUST include a nextcloud_create step — that is the step that actually creates
+   it. nextcloud_list_calendars and nextcloud_find only look; on their own they
+   change nothing. Use nextcloud_update to change an event and nextcloud_delete
+   to remove one.
+9. file_write saves text to ~/jrvs-workspace/ — use it for "save this to a file"
+   tasks only. It is NEVER a substitute for a real action. If the user asked for a
+   calendar event, an email, or anything else in the world, writing a file does not
+   fulfil that request — plan the tool that actually performs it.
+10. Every plan must contain the step that performs what the user asked for. Reading
+   and searching steps are optional; the acting step is not.
 """
+
+
+def _planner_model() -> "dict[str, str]":
+    """Extra kwargs pinning planning calls to a stronger model.
+
+    Planning is where a small local model fails: nemo:12b executes a good plan
+    fine but authors bad ones. Planning is also only a couple of calls per goal,
+    so a slower, better model is affordable here in a way it is not for chat.
+    Set JRVS_PLANNER_MODEL to enable; unset means plan with the default model.
+    """
+    import os
+    model = os.environ.get("JRVS_PLANNER_MODEL", "").strip()
+    if not model:
+        return {}
+    # Keep the planner resident just long enough to cover one planning burst,
+    # then let it go. A goal calls it twice in quick succession — LeadAgent
+    # decomposes, then AgentLoop plans — and gpt-oss:20b costs ~25s to load
+    # because at 13GB it does not fit a 12GB card and spills to CPU. Unloading
+    # between those two calls pays that twice; holding it for the default 5m
+    # instead evicts the small model that serves chat and every tool step. A
+    # short window spans the burst and frees the GPU before execution.
+    return {"model": model, "keep_alive": os.environ.get("JRVS_PLANNER_KEEP_ALIVE", "90s")}
+
+
+def _now_str() -> str:
+    """Current local date/time for the planner prompt.
+
+    The planner had no clock at all, so "tomorrow at 6pm" resolved to whatever
+    the model guessed — it once booked an event for 2024-07-18.
+    """
+    from datetime import datetime
+    return datetime.now().astimezone().strftime("%A %d %B %Y, %H:%M %Z")
 
 
 # ── Data structures ───────────────────────────────────────────────────────────
@@ -254,7 +305,7 @@ class AgentLoop:
             memory_block = "Memory from previous runs:\n" + \
                 "\n".join(f"  {k}: {v}" for k, v in list(memory.items())[:10]) + "\n\n"
 
-        system = _PLANNER_SYSTEM.format(catalogue=catalogue)
+        system = _PLANNER_SYSTEM.format(catalogue=catalogue, today=_now_str())
         user_msg = (
             f"{memory_block}"
             f"Goal: {goal_text}\n\n"
@@ -264,7 +315,7 @@ class AgentLoop:
         raw = await backend.chat(messages=[
             {"role": "system", "content": system},
             {"role": "user",   "content": user_msg},
-        ])
+        ], **_planner_model())
         return _parse_plan(raw, allowed_names=self._allowed_tools)
 
     async def _replan(
@@ -279,7 +330,7 @@ class AgentLoop:
         exclude = self._effective_exclude_prefixes()
         catalogue = tool_registry.catalogue_for_prompt(exclude=exclude or None)
         remaining_json = json.dumps([_step_to_dict(s) for s in remaining], indent=2)
-        system = _PLANNER_SYSTEM.format(catalogue=catalogue)
+        system = _PLANNER_SYSTEM.format(catalogue=catalogue, today=_now_str())
         user_msg = (
             f"Goal: {goal_text}\n\n"
             f"Step {failed_step.step} ({failed_step.tool}) failed with error: {error}\n\n"
@@ -291,7 +342,7 @@ class AgentLoop:
             raw = await backend.chat(messages=[
                 {"role": "system", "content": system},
                 {"role": "user",   "content": user_msg},
-            ])
+            ], **_planner_model())
             return _parse_plan(raw, allowed_names=self._allowed_tools)
         except Exception as exc:
             log.error("AgentLoop: replan failed: %s — using original remaining steps", exc)
@@ -439,12 +490,28 @@ class AgentLoop:
                 )
                 return {"status": "error", "error": str(result["error"])}
 
-            log.info("AgentLoop: step %d [%s] %s — OK", step.step, tier.upper(), step.tool)
-            if tier == NOTIFY:
-                await _notify_slack(
-                    f":white_check_mark: *Step completed* — `{step.tool}`\n{_truncate(str(result), 300)}",
+            status, detail = await verify_action(step.tool, args, result)
+            if status == FAILED:
+                log.error(
+                    "AgentLoop: step %d (%s) reported success but verification failed: %s",
+                    step.step, step.tool, detail,
                 )
-            return {"status": "success", "result": result}
+                return {
+                    "status": "error",
+                    "error": f"{step.tool} reported success but did not take effect: {detail}",
+                }
+
+            log.info(
+                "AgentLoop: step %d [%s] %s — OK (%s)",
+                step.step, tier.upper(), step.tool, status,
+            )
+            if tier == NOTIFY:
+                mark = ":white_check_mark:" if status == VERIFIED else ":grey_question:"
+                suffix = "" if status == VERIFIED else "  _(not independently verified)_"
+                await _notify_slack(
+                    f"{mark} *Step completed* — `{step.tool}`{suffix}\n{_truncate(str(result), 300)}",
+                )
+            return {"status": "success", "result": result, "verification": status}
         except Exception as exc:
             log.error("AgentLoop: step %d (%s) raised: %s", step.step, step.tool, exc)
             return {"status": "error", "error": str(exc)}
@@ -513,60 +580,20 @@ class AgentLoop:
             return {"status": "error", "error": str(exc)}
 
         # Verify the outcome
-        verified = await self._verify_confirm_step(step.tool, args, result)
-        if not verified:
+        status, detail = await verify_action(step.tool, args, result)
+        if status == FAILED:
             msg = (
                 f":warning: *Approval verification failed* for `{step.tool}` "
-                f"(action `{action_id[:8]}`)\n"
-                f"The action was approved and executed but the expected outcome "
-                f"could not be confirmed."
+                f"(action `{action_id[:8]}`)\n{detail}"
             )
             await _notify_slack(msg, channel_key="alerts")
-            return {"status": "error", "error": "Post-execution verification failed"}
+            return {"status": "error", "error": f"Post-execution verification failed: {detail}"}
 
         await _notify_slack(
             f":white_check_mark: *Approved action completed* — `{step.tool}`\n"
             f"{_truncate(str(result), 300)}"
         )
         return {"status": "verified", "result": result}
-
-    async def _verify_confirm_step(self, tool: str, args: dict, result: Any) -> bool:
-        """
-        Verify that a CONFIRM-tier action actually took effect.
-        Returns True if verification passes or is not applicable.
-        """
-        try:
-            if tool == "gmail_send":
-                # Verify by checking Sent folder for a recent message to the recipient
-                from agent.tools import gmail_search
-                to_addr = args.get("to", "")
-                subject = args.get("subject", "")
-                results = await gmail_search(
-                    query=f"in:sent to:{to_addr} subject:{subject[:30]}",
-                    max_results=1,
-                )
-                return bool(results)
-
-            if tool == "gmail_reply":
-                # Verify by checking that the thread has a recent outbound message
-                message_id = args.get("message_id", "")
-                result_id = result.get("id", "") if isinstance(result, dict) else ""
-                return bool(result_id)
-
-            if tool == "calendar_delete":
-                # Verify by confirming the event is gone
-                from agent.tools import calendar_find
-                event_id = args.get("event_id", "")
-                # If the deleted event no longer appears in search, it's confirmed
-                # We use the result from delete which returns {} on success
-                return isinstance(result, dict) and "error" not in result
-
-            # For other CONFIRM tools, trust the result
-            return True
-
-        except Exception as exc:
-            log.warning("AgentLoop: verification check raised: %s", exc)
-            return True  # Don't block on verification errors
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 

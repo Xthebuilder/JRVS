@@ -28,7 +28,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from agent.approvals import ApprovalCoordinator, init_approval_coordinator
-from agent.loop import AgentLoop, GoalResult, _notify_slack, _truncate
+from agent.loop import AgentLoop, GoalResult, _notify_slack, _truncate, _planner_model
 from agent.roles import ROLES, role_catalogue_for_prompt, tools_for_role
 from agent.scheduling import next_ready_batch
 from llm.protocol import LLMBackend
@@ -41,6 +41,10 @@ DEFAULT_ROLE_MAX_RETRIES = 2
 
 _LEAD_SYSTEM = """\
 You are the lead of a team of specialized JARVIS sub-agents.
+
+Right now it is {today}. Resolve "tomorrow", "tonight", "next Friday" against it
+and write the resolved date INTO the instruction, so the team member does not
+have to guess.
 
 Break the user's goal into an ordered list of subtasks, each assigned to
 exactly one team member (role):
@@ -60,10 +64,24 @@ Rules:
    Subtasks with no depends_on (or []) may run in parallel.
 4. Use "<result_from_subtask_N>" as a placeholder inside an instruction when
    it needs a result produced by subtask N.
-5. If the goal fits cleanly within ONE role, return a single subtask — don't
-   split work across roles when the goal isn't actually cross-domain.
-6. Keep the plan concise — 6 subtasks max.
-7. Only use role names from the list above. Never invent a role.
+5. DEFAULT TO ONE SUBTASK. Most goals are a single action and need exactly one.
+   Only split when the goal genuinely cannot be done by one role. "Add a calendar
+   event", "save this file", "send this email" are each ONE subtask.
+6. Do ONLY what the user asked for. Never add work they did not request — no
+   extra emails, notifications, images, reminders, confirmations, or follow-up
+   steps. If the user asked for a calendar event, the entire plan is creating
+   that calendar event. Inventing extra subtasks is a failure, not helpfulness.
+7. Copy the concrete details from the goal into the instruction verbatim — the
+   exact title/summary, date, time, and names the user gave. The team member
+   cannot see the original goal, so a detail you omit is lost. Words after "make
+   it" or "call it" are the event's title, not a separate task. If the user gave
+   a specific time ("6pm"), that time MUST appear in the instruction. An event
+   with a time is NOT an all-day event. Never write the words "all-day" in an
+   instruction that also carries a clock time — that contradiction makes the
+   team member drop the time. Never silently change, drop, or round a time or
+   date the user gave you.
+8. Keep the plan concise — 6 subtasks max, but prefer 1.
+9. Only use role names from the list above. Never invent a role.
 """
 
 
@@ -177,12 +195,12 @@ class LeadAgent:
     # ── Decomposition ────────────────────────────────────────────────────────
 
     async def _decompose(self, goal_text: str, backend: LLMBackend) -> list[SubtaskSpec]:
-        system = _LEAD_SYSTEM.format(roles=role_catalogue_for_prompt())
+        system = _LEAD_SYSTEM.format(roles=role_catalogue_for_prompt(), today=_now_str())
         user_msg = f"Goal: {goal_text}\n\nReturn a JSON array of subtasks (max 6)."
         raw = await backend.chat(messages=[
             {"role": "system", "content": system},
             {"role": "user",   "content": user_msg},
-        ])
+        ], **_planner_model())
         return _parse_subtasks(raw)
 
     async def _replan(
@@ -194,7 +212,7 @@ class LeadAgent:
         backend: LLMBackend,
     ) -> list[SubtaskSpec]:
         """Ask the LLM to recover from a failed subtask."""
-        system = _LEAD_SYSTEM.format(roles=role_catalogue_for_prompt())
+        system = _LEAD_SYSTEM.format(roles=role_catalogue_for_prompt(), today=_now_str())
         remaining_json = json.dumps([_subtask_to_dict(s) for s in remaining], indent=2)
         user_msg = (
             f"Goal: {goal_text}\n\n"
@@ -204,7 +222,7 @@ class LeadAgent:
             "Return a JSON array of revised subtasks only."
         )
         try:
-            raw = await backend.chat(messages=[
+            raw = await backend.chat(**_planner_model(), messages=[
                 {"role": "system", "content": system},
                 {"role": "user",   "content": user_msg},
             ])
@@ -359,6 +377,12 @@ class LeadAgent:
 
 
 # ── Module-level helpers ──────────────────────────────────────────────────────
+
+def _now_str() -> str:
+    """Current local date/time, so the lead can resolve relative dates."""
+    from datetime import datetime
+    return datetime.now().astimezone().strftime("%A %d %B %Y, %H:%M %Z")
+
 
 def _parse_subtasks(raw: str) -> list[SubtaskSpec]:
     """Parse LLM output into a list of SubtaskSpec, validating each entry."""

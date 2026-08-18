@@ -348,7 +348,8 @@ async def calendar_update(event_id: str, calendar_id: str = "primary", **fields)
 
 # ── Nextcloud CalDAV (NOTIFY writes) ──────────────────────────────────────────
 
-@jarvis_tool(name="nextcloud_create", tier=NOTIFY, desc="Create a Nextcloud calendar event")
+@jarvis_tool(name="nextcloud_create", tier=NOTIFY,
+             desc="Create a Nextcloud calendar event; start/end are ISO 8601 e.g. 2026-08-18T18:00:00")
 async def nextcloud_create(
     summary: str,
     start: str,
@@ -356,14 +357,23 @@ async def nextcloud_create(
     description: str = "",
     location: str = "",
     calendar_name: str = "",
+    all_day: bool = False,
 ) -> dict:
     from jrvs.nextcloud.caldav_client import CalDAVClient
     client = CalDAVClient()
+    # An event with a clock time is not an all-day event, whatever the planner
+    # says. Local models keep emitting "all-day" as filler alongside a real time
+    # ("Create an all-day event... set the time from 6pm to 7pm"), which lands as
+    # a date-only VEVENT and quietly loses the hour the user asked for.
+    if all_day and "T" in start:
+        log.info("nextcloud_create: start %r has a time — ignoring all_day=True", start)
+        all_day = False
     return await _run_sync(
         client.create_event,
         summary=summary, start=start, end=end,
         description=description, location=location,
         calendar_name=calendar_name or None,
+        all_day=all_day,
     )
 
 
