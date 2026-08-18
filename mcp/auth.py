@@ -8,7 +8,7 @@ import functools
 import hashlib
 import secrets
 from typing import Optional, Set, Dict
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta, timezone
 from dataclasses import dataclass
 from threading import Lock
 import logging
@@ -64,13 +64,13 @@ class AuthManager:
         # Calculate expiration
         expires_at = None
         if expires_in_days:
-            expires_at = datetime.utcnow() + timedelta(days=expires_in_days)
+            expires_at = datetime.now(timezone.utc) + timedelta(days=expires_in_days)
 
         # Create API key object
         api_key = APIKey(
             key_hash=key_hash,
             client_id=client_id,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             expires_at=expires_at,
             roles=roles or {"user"}  # Default role
         )
@@ -103,12 +103,12 @@ class AuthManager:
                 return None
 
             # Check expiration
-            if api_key.expires_at and datetime.utcnow() > api_key.expires_at:
+            if api_key.expires_at and datetime.now(timezone.utc) > api_key.expires_at:
                 logger.warning(f"Expired API key used: {api_key.client_id}")
                 return None
 
             # Update usage
-            api_key.last_used = datetime.utcnow()
+            api_key.last_used = datetime.now(timezone.utc)
             api_key.use_count += 1
 
             return api_key

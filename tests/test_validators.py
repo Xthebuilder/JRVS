@@ -230,7 +230,7 @@ class TestValidateSessionId:
 class TestValidateIsoDate:
 
     def test_full_iso(self):
-        from datetime import datetime
+        from datetime import datetime, timezone, timezone
 
         dt = validate_iso_date("2025-11-10T14:30:00")
         assert isinstance(dt, datetime)
@@ -304,7 +304,7 @@ class TestPydanticIntegration:
     """Verify that the validators raise cleanly when wired into Field+validator patterns."""
 
     def test_sanitize_text_in_validator_flow(self):
-        """Simulates @validator('message') calling sanitize_text()."""
+        """Simulates @field_validator('message') calling sanitize_text()."""
         raw = '  <script>alert(1)</script>Hello  '
         cleaned = sanitize_text(raw)
         assert cleaned == "Hello"

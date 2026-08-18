@@ -8,7 +8,7 @@ Fallback, and BulkheadLimiter.
 import sys
 import asyncio
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta, timezone
 
 import pytest
 
@@ -59,7 +59,7 @@ class TestCircuitBreaker:
             cb.call(lambda: (_ for _ in ()).throw(RuntimeError("fail")))
         assert cb.state == CircuitState.OPEN
         # recovery_timeout=0, so should immediately try to reset
-        cb.last_failure_time = datetime.utcnow() - timedelta(seconds=1)
+        cb.last_failure_time = datetime.now(timezone.utc) - timedelta(seconds=1)
         # Next call should attempt half-open
         try:
             cb.call(lambda: "recovered")

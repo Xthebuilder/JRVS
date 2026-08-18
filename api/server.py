@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Dict, Any
 import asyncio
 import logging
@@ -31,6 +31,7 @@ from core.calendar_parser import (
     format_event_confirmation,
 )
 from scraper.web_scraper import web_scraper
+from guardian_module import guardian_module
 import re
 from config import (
     VOICE_MAX_CONTEXT_LENGTH,
@@ -131,14 +132,16 @@ class ChatRequest(BaseModel):
     stream: bool = False
     voice: bool = False  # Use voice-optimized prompt + reduced RAG context
 
-    @validator('message')
+    @field_validator('message')
+    @classmethod
     def sanitize_message(cls, v):
         v = sanitize_text(v)
         if not v:
             raise ValueError('Message cannot be empty')
         return v
 
-    @validator('session_id', pre=True, always=True)
+    @field_validator('session_id', mode='before')
+    @classmethod
     def check_session_id(cls, v):
         if v is not None:
             return validate_session_id(v)
@@ -156,11 +159,13 @@ class EventRequest(BaseModel):
     description: Optional[str] = Field("", max_length=2000)
     reminder_minutes: Optional[int] = Field(0, ge=0, le=10080)  # max 1 week
 
-    @validator('title')
+    @field_validator('title')
+    @classmethod
     def sanitize_title(cls, v):
         return sanitize_text(v, max_length=MAX_TITLE_LEN)
 
-    @validator('event_date')
+    @field_validator('event_date')
+    @classmethod
     def check_event_date(cls, v):
         validate_iso_date(v)  # raises ValueError on bad format
         return v
@@ -168,15 +173,32 @@ class EventRequest(BaseModel):
 class ScrapeRequest(BaseModel):
     url: str = Field(..., max_length=MAX_URL_LEN)
 
-    @validator('url')
+    @field_validator('url')
+    @classmethod
     def check_url(cls, v):
         return validate_url(v)
+
+
+class GuardianFetchRequest(BaseModel):
+    query: str = Field(default="", max_length=500)
+    section: str = Field(default="", max_length=120)
+    from_date: str = Field(default="", max_length=30)
+    to_date: str = Field(default="", max_length=30)
+    page_size: int = Field(default=25, ge=1, le=50)
+    pages: int = Field(default=1, ge=1, le=5)
+
+
+class GuardianBriefRequest(BaseModel):
+    days: int = Field(default=1, ge=1, le=30)
+    topic: str = Field(default="", max_length=200)
+    limit: int = Field(default=120, ge=10, le=400)
 
 # Google Workspace models
 class GoogleAuthRequest(BaseModel):
     code: str = Field(..., min_length=1, max_length=2048)
 
-    @validator('code')
+    @field_validator('code')
+    @classmethod
     def sanitize_code(cls, v):
         return sanitize_text(v, max_length=2048)
 
@@ -185,11 +207,13 @@ class GmailSendRequest(BaseModel):
     subject: str = Field(..., min_length=1, max_length=998)  # RFC 2822 limit
     body: str = Field(..., min_length=1, max_length=50_000)
 
-    @validator('to')
+    @field_validator('to')
+    @classmethod
     def check_email(cls, v):
         return validate_email(v)
 
-    @validator('subject')
+    @field_validator('subject')
+    @classmethod
     def sanitize_subject(cls, v):
         return sanitize_text(v, max_length=998)
 
@@ -197,7 +221,8 @@ class GoogleDocsCreateRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=MAX_TITLE_LEN)
     content: str = Field(..., min_length=1, max_length=100_000)
 
-    @validator('title')
+    @field_validator('title')
+    @classmethod
     def sanitize_title(cls, v):
         return sanitize_text(v, max_length=MAX_TITLE_LEN)
 
@@ -655,6 +680,49 @@ async def scrape_url(request: ScrapeRequest):
 async def search_documents(query: str, limit: int = 5):
     results = await rag_retriever.search_documents(query)
     return {"results": results[:limit]}
+
+
+@app.get("/api/guardian/status", dependencies=[Depends(require_auth)])
+async def guardian_status():
+    return {
+        "configured": guardian_module.configured,
+        "base_url": guardian_module.base_url,
+    }
+
+
+@app.post("/api/guardian/fetch", dependencies=[Depends(require_auth)])
+async def guardian_fetch(request: GuardianFetchRequest):
+    try:
+        summary = await guardian_module.fetch_and_store(
+            query=request.query,
+            section=request.section,
+            from_date=request.from_date,
+            to_date=request.to_date,
+            page_size=request.page_size,
+            pages=request.pages,
+            ingest_to_rag=True,
+        )
+        return {"success": True, **summary}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get("/api/guardian/search", dependencies=[Depends(require_auth)])
+async def guardian_search(query: str, section: str = "", limit: int = 20):
+    if not query.strip():
+        raise HTTPException(status_code=400, detail="query is required")
+    rows = await guardian_module.search_articles(query=query.strip(), section=section, limit=limit)
+    return {"results": rows, "count": len(rows)}
+
+
+@app.post("/api/guardian/brief", dependencies=[Depends(require_auth)])
+async def guardian_brief(request: GuardianBriefRequest):
+    brief = await guardian_module.analyst_brief(
+        days=request.days,
+        topic=request.topic,
+        limit=request.limit,
+    )
+    return brief
 
 # Conversation history
 @app.get("/api/history/{session_id}")

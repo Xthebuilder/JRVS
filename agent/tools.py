@@ -563,3 +563,28 @@ async def code_test(code: str, language: str = "python", test_framework: str = "
 async def code_execute(code: str, language: str = "python", timeout: int = 30) -> dict:
     from mcp_gateway.coding_agent import jarcore
     return await jarcore.execute_code(code=code, language=language, timeout=timeout)
+
+# ── Autonomous Research (NOTIFY trigger) ──────────────────────────────────────
+
+@jarvis_tool(
+    name="reddit_research",
+    tier=NOTIFY,
+    desc="Trigger an in-depth, long-running research task on a topic using the Reddit Research OS.",
+)
+async def reddit_research(topic: str, subreddits: str = "", reason: str = "") -> dict:
+    from autonomous_research import autonomous_researcher
+    sub_list = [s.strip() for s in subreddits.split(",") if s.strip()] if subreddits else []
+    try:
+        job_id = await autonomous_researcher.queue_topic(
+            topic=topic,
+            reason=reason or "Triggered manually via agent tool.",
+            subreddits=sub_list,
+            source="agent_tool"
+        )
+        return {
+            "job_id": job_id, 
+            "status": "queued",
+            "message": f"Autonomous research on '{topic}' has been queued and will notify via Slack upon completion."
+        }
+    except Exception as exc:
+        return {"error": str(exc)}

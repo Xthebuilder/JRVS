@@ -9,7 +9,7 @@ import signal
 import asyncio
 import sys
 from typing import List, Callable, Optional
-from datetime import datetime
+from datetime import datetime, timezone, timezone
 import logging
 
 logger = logging.getLogger(__name__)
@@ -60,7 +60,7 @@ class ShutdownHandler:
             logger.warning("Shutdown already in progress")
             return
 
-        self._start_time = datetime.utcnow()
+        self._start_time = datetime.now(timezone.utc)
 
         logger.info("=" * 70)
         logger.info("GRACEFUL SHUTDOWN INITIATED")
@@ -92,7 +92,7 @@ class ShutdownHandler:
                 failed_count += 1
 
         # Calculate shutdown time
-        shutdown_duration = (datetime.utcnow() - self._start_time).total_seconds()
+        shutdown_duration = (datetime.now(timezone.utc) - self._start_time).total_seconds()
 
         logger.info("=" * 70)
         logger.info("SHUTDOWN SUMMARY")

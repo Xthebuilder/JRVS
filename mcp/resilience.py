@@ -9,7 +9,7 @@ import asyncio
 import time
 from typing import Callable, Any, Optional, TypeVar, Union
 from functools import wraps
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta, timezone
 from enum import Enum
 import logging
 
@@ -89,7 +89,7 @@ class CircuitBreaker:
     def _on_failure(self):
         """Handle failed call"""
         self.failure_count += 1
-        self.last_failure_time = datetime.utcnow()
+        self.last_failure_time = datetime.now(timezone.utc)
 
         if self.failure_count >= self.failure_threshold:
             self.state = CircuitState.OPEN
@@ -102,7 +102,7 @@ class CircuitBreaker:
         if self.last_failure_time is None:
             return False
 
-        elapsed = (datetime.utcnow() - self.last_failure_time).total_seconds()
+        elapsed = (datetime.now(timezone.utc) - self.last_failure_time).total_seconds()
         return elapsed >= self.recovery_timeout
 
 

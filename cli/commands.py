@@ -374,6 +374,112 @@ class CommandHandler:
                     "Call download_music() for each URL now."
                 )
 
+            elif command == "guardian":
+                sub = command_args[0] if command_args else ""
+                if sub == "fetch":
+                    # Usage: /guardian fetch [--section SECTION] [--pages N] [--page-size N] <query...>
+                    remaining = command_args[1:]
+                    section, pages, page_size = "", 1, 25
+                    query_parts = []
+                    i = 0
+                    while i < len(remaining):
+                        tok = remaining[i]
+                        if tok == "--section" and i + 1 < len(remaining):
+                            section = remaining[i + 1]
+                            i += 2
+                        elif tok == "--pages" and i + 1 < len(remaining):
+                            try:
+                                pages = int(remaining[i + 1])
+                            except ValueError:
+                                theme.print_error("--pages must be an integer")
+                                return
+                            i += 2
+                        elif tok == "--page-size" and i + 1 < len(remaining):
+                            try:
+                                page_size = int(remaining[i + 1])
+                            except ValueError:
+                                theme.print_error("--page-size must be an integer")
+                                return
+                            i += 2
+                        else:
+                            query_parts.append(tok)
+                            i += 1
+                    query = " ".join(query_parts).strip()
+                    await self.cli.guardian_fetch(
+                        query=query,
+                        section=section,
+                        pages=pages,
+                        page_size=page_size,
+                    )
+                elif sub == "search":
+                    if len(command_args) < 2:
+                        theme.print_error("Usage: /guardian search <query> [--section SECTION]")
+                    else:
+                        remaining = command_args[1:]
+                        section = ""
+                        query_parts = []
+                        i = 0
+                        while i < len(remaining):
+                            tok = remaining[i]
+                            if tok == "--section" and i + 1 < len(remaining):
+                                section = remaining[i + 1]
+                                i += 2
+                            else:
+                                query_parts.append(tok)
+                                i += 1
+                        query = " ".join(query_parts).strip()
+                        await self.cli.guardian_search(query=query, section=section)
+                elif sub == "brief":
+                    # Usage: /guardian brief [days] [topic...]
+                    if len(command_args) >= 2 and command_args[1].isdigit():
+                        days = int(command_args[1])
+                        topic = " ".join(command_args[2:]).strip()
+                    else:
+                        days = 1
+                        topic = " ".join(command_args[1:]).strip()
+                    await self.cli.guardian_brief(days=days, topic=topic)
+                elif sub == "schedule":
+                    # Usage: /guardian schedule [--cron "0 8 * * *"] [--days N] [--topic TOPIC...]
+                    remaining = command_args[1:]
+                    cron = "0 8 * * *"
+                    days = 1
+                    topic = ""
+                    topic_parts = []
+                    i = 0
+                    while i < len(remaining):
+                        tok = remaining[i]
+                        if tok == "--cron" and i + 1 < len(remaining):
+                            cron = remaining[i + 1]
+                            i += 2
+                        elif tok == "--days" and i + 1 < len(remaining):
+                            try:
+                                days = int(remaining[i + 1])
+                            except ValueError:
+                                theme.print_error("--days must be an integer")
+                                return
+                            i += 2
+                        elif tok == "--topic" and i + 1 < len(remaining):
+                            topic_parts.extend(remaining[i + 1 :])
+                            break
+                        else:
+                            topic_parts.append(tok)
+                            i += 1
+                    topic = " ".join(topic_parts).strip()
+                    await self.cli.guardian_schedule_brief(
+                        cron=cron,
+                        days=days,
+                        topic=topic,
+                    )
+                elif sub == "status":
+                    self.cli.guardian_status()
+                else:
+                    theme.print_error("Usage: /guardian <status|fetch|search|brief|schedule>")
+                    theme.print_info("  /guardian status")
+                    theme.print_info("  /guardian fetch [--section S] [--pages N] [--page-size N] <query>")
+                    theme.print_info("  /guardian search <query> [--section S]")
+                    theme.print_info("  /guardian brief [days] [topic]")
+                    theme.print_info("  /guardian schedule [--cron \"0 8 * * *\"] [--days N] [--topic T]")
+
             elif command == "marketing":
                 sub = command_args[0] if command_args else ""
                 if sub == "queue":

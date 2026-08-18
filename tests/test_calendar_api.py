@@ -4,7 +4,7 @@
 import asyncio
 import pytest
 httpx = pytest.importorskip("httpx")
-from datetime import datetime
+from datetime import datetime, timezone, timezone
 
 async def test_calendar():
     """Test adding calendar event via API"""
@@ -12,7 +12,7 @@ async def test_calendar():
     # Start by testing the calendar module directly
     print("1. Testing calendar module directly...")
     from core.calendar import calendar
-    from datetime import datetime
+    from datetime import datetime, timezone, timezone
 
     try:
         await calendar.initialize()

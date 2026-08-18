@@ -6,7 +6,7 @@ calendar_parser is a pure-logic module — highly testable without mocking.
 
 import sys
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import pytest
 

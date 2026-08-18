@@ -8,7 +8,7 @@ and error aggregation.
 import logging
 import json
 import sys
-from datetime import datetime
+from datetime import datetime, timezone, timezone
 from typing import Any, Dict, Optional
 from pathlib import Path
 import traceback
@@ -24,7 +24,7 @@ class JSONFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         """Format log record as JSON"""
         log_data = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
             "service": self.service_name,
             "level": record.levelname,
             "logger": record.name,
@@ -168,7 +168,7 @@ class RequestContext:
         self.request_id = request_id
         self.tool_name = tool_name
         self.client_id = client_id
-        self.start_time = datetime.utcnow()
+        self.start_time = datetime.now(timezone.utc)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
@@ -181,7 +181,7 @@ class RequestContext:
 
     def log_completion(self, logger: logging.Logger, success: bool, error: str = None):
         """Log request completion"""
-        duration_ms = (datetime.utcnow() - self.start_time).total_seconds() * 1000
+        duration_ms = (datetime.now(timezone.utc) - self.start_time).total_seconds() * 1000
 
         log_data = {
             **self.to_dict(),

@@ -9,7 +9,7 @@ import time
 import asyncio
 from typing import Dict, Optional
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta, timezone
 from collections import defaultdict
 from threading import Lock
 import logging
@@ -220,7 +220,7 @@ class ResourceManager:
                 )
 
             self._current_requests += 1
-            self._request_start_times[request_id] = datetime.utcnow()
+            self._request_start_times[request_id] = datetime.now(timezone.utc)
             return True
 
     def release_request_slot(self, request_id: str):
@@ -244,7 +244,7 @@ class ResourceManager:
             if start_time is None:
                 return
 
-            duration = (datetime.utcnow() - start_time).total_seconds()
+            duration = (datetime.now(timezone.utc) - start_time).total_seconds()
 
             if duration > self.max_request_duration_seconds:
                 raise ResourceExhaustedError(
@@ -258,7 +258,7 @@ class ResourceManager:
         with self._lock:
             # Calculate request durations
             durations = []
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
 
             for start_time in self._request_start_times.values():
                 duration = (now - start_time).total_seconds()
@@ -295,7 +295,7 @@ class QuotaManager:
         self._lock = Lock()
 
         # Reset tracking
-        self._last_reset: Dict[str, datetime] = defaultdict(lambda: datetime.utcnow())
+        self._last_reset: Dict[str, datetime] = defaultdict(lambda: datetime.now(timezone.utc))
         self._reset_interval = timedelta(hours=1)  # Reset hourly
 
     def set_quota(self, client_id: str, resource_type: str, limit: int):
@@ -353,7 +353,7 @@ class QuotaManager:
 
     def _check_reset(self, client_id: str):
         """Check if quota should be reset"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         last_reset = self._last_reset[client_id]
 
         if now - last_reset > self._reset_interval:

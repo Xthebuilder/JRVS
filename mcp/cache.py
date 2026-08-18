@@ -11,7 +11,7 @@ import time
 import hashlib
 import json
 from typing import Any, Optional, Dict, Callable
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta, timezone
 from dataclasses import dataclass
 from collections import OrderedDict
 from threading import Lock
@@ -63,14 +63,14 @@ class LRUCache:
                 return None
 
             # Check if expired
-            if datetime.utcnow() > entry.expires_at:
+            if datetime.now(timezone.utc) > entry.expires_at:
                 self._cache.pop(key)
                 self.misses += 1
                 return None
 
             # Update stats and move to end (most recently used)
             entry.hit_count += 1
-            entry.last_accessed = datetime.utcnow()
+            entry.last_accessed = datetime.now(timezone.utc)
             self.hits += 1
 
             # Move to end (LRU)
@@ -86,8 +86,8 @@ class LRUCache:
             entry = CacheEntry(
                 key=key,
                 value=value,
-                created_at=datetime.utcnow(),
-                expires_at=datetime.utcnow() + timedelta(seconds=ttl)
+                created_at=datetime.now(timezone.utc),
+                expires_at=datetime.now(timezone.utc) + timedelta(seconds=ttl)
             )
 
             # If key exists, update it
@@ -122,7 +122,7 @@ class LRUCache:
     def cleanup_expired(self) -> int:
         """Remove expired entries, return count removed"""
         with self._lock:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             expired_keys = [
                 key for key, entry in self._cache.items()
                 if now > entry.expires_at

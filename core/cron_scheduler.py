@@ -123,6 +123,35 @@ async def _insert_job(job: Dict[str, Any]) -> None:
         await db.commit()
 
 
+async def _insert_job_direct(
+    *,
+    job_id: str,
+    description: str,
+    action: str,
+    cron: str,
+    human_schedule: str = "",
+    status: str = "pending",
+) -> None:
+    async with aiosqlite.connect(_DB) as db:
+        await db.execute("PRAGMA journal_mode = WAL")
+        await db.execute(
+            """INSERT INTO scheduled_jobs
+               (id, description, action, cron, human_schedule, status, created_at, next_run)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                job_id,
+                description,
+                action,
+                cron,
+                human_schedule,
+                status,
+                int(datetime.now().timestamp()),
+                int(_next_run(cron)),
+            ),
+        )
+        await db.commit()
+
+
 async def _set_status(job_id: str, status: str) -> bool:
     col = "approved_at" if status == "active" else "denied_at"
     async with aiosqlite.connect(_DB) as db:
@@ -229,6 +258,7 @@ class CronScheduler:
         self._running = False
         self._task: Optional[asyncio.Task] = None
         self._notify: Optional[Callable[[str], None]] = None
+        self._active_jobs = set()
 
     def set_llm_client(self, client) -> None:
         self._llm_client = client
@@ -294,6 +324,39 @@ class CronScheduler:
             return None
         await _insert_job(job)
         log.info("CronScheduler: created pending job %s: %s", job["id"], job["description"])
+        return job
+
+    async def create_pending_job(
+        self,
+        *,
+        description: str,
+        action: str,
+        cron: str,
+        human_schedule: str = "",
+    ) -> Dict[str, Any]:
+        """Create a pending schedule directly without LLM parsing."""
+        await _ensure_tables()
+        try:
+            croniter(cron)
+        except Exception as exc:
+            raise ValueError(f"Invalid cron expression: {cron}") from exc
+
+        job = {
+            "id": str(uuid.uuid4())[:8],
+            "description": description,
+            "action": action,
+            "cron": cron,
+            "human_schedule": human_schedule,
+            "status": "pending",
+        }
+        await _insert_job_direct(
+            job_id=job["id"],
+            description=description,
+            action=action,
+            cron=cron,
+            human_schedule=human_schedule,
+            status="pending",
+        )
         return job
 
     async def approve(self, job_id: str) -> bool:
@@ -364,21 +427,61 @@ class CronScheduler:
             try:
                 due = await _get_due_jobs()
                 for job in due:
+                    if job["id"] in self._active_jobs:
+                        continue
+                    self._active_jobs.add(job["id"])
                     asyncio.create_task(self._run_job(job))
             except Exception as exc:
                 log.error("CronScheduler loop error: %s", exc)
             await asyncio.sleep(30)  # check every 30s
 
     async def _run_job(self, job: Dict) -> None:
-        if self._llm_client is None:
-            return
-
+        await _ensure_tables()
         job_id = job["id"]
         action = job["action"]
         start = datetime.now()
         log.info("CronScheduler: running job %s: %s", job_id, action[:80])
 
         try:
+            if action.startswith("guardian_brief_report:"):
+                payload = json.loads(action.split(":", 1)[1])
+                days = int(payload.get("days", 1))
+                topic = str(payload.get("topic", ""))
+                limit = int(payload.get("limit", 150))
+
+                from guardian_module import guardian_module
+                report = await guardian_module.generate_and_save_report(
+                    days=days,
+                    topic=topic,
+                    limit=limit,
+                )
+                result = (
+                    f"Guardian brief generated ({report.get('articles_analyzed', 0)} articles). "
+                    f"Report: {report.get('report_url', '')}"
+                )
+                duration_ms = (datetime.now() - start).total_seconds() * 1000
+                await _mark_ran(job_id, result, True, duration_ms)
+
+                summary = (
+                    f"\n[Scheduled job '{job_id}' ran] {job['description']}\n"
+                    f"Report saved: {report.get('report_path', '')}"
+                )
+                self._print(summary)
+
+                from core.slack_notifier import notify_async
+                md_url = report.get('report_url', '')
+                html_url = report.get('html_report_url', '')
+                links = f"📄 <{md_url}|Markdown> | 🌐 <{html_url}|HTML>"
+                await notify_async(
+                    f":newspaper: *Guardian brief generated* — _{job['description']}_\n"
+                    f"{links}",
+                    channel_key="research",
+                )
+                return
+
+            if self._llm_client is None:
+                raise RuntimeError("LLM client not configured for generic scheduled action")
+
             from mcp_gateway.agent import mcp_agent
             agent_result = await mcp_agent.process_request(action)
 
@@ -425,6 +528,8 @@ class CronScheduler:
                 f":x: *Scheduled job failed* — _{job['description']}_\nError: {exc}",
                 channel_key="alerts",
             )
+        finally:
+            self._active_jobs.discard(job_id)
 
 
 # Global singleton

@@ -7,7 +7,7 @@ authorization, revocation, and client info. No external dependencies.
 
 import sys
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta, timezone
 
 import pytest
 
@@ -53,7 +53,7 @@ class TestKeyGeneration:
         key = auth.generate_api_key("c", expires_in_days=30)
         api_key = auth.validate_api_key(key)
         assert api_key.expires_at is not None
-        delta = api_key.expires_at - datetime.utcnow()
+        delta = api_key.expires_at - datetime.now(timezone.utc)
         assert 29 <= delta.days <= 30
 
     def test_client_id_stored(self, auth):
@@ -85,7 +85,7 @@ class TestKeyValidation:
 
     def test_last_used_updated(self, auth):
         key = auth.generate_api_key("c")
-        before = datetime.utcnow()
+        before = datetime.now(timezone.utc)
         auth.validate_api_key(key)
         api_key = auth.validate_api_key(key)
         assert api_key.last_used >= before
@@ -94,7 +94,7 @@ class TestKeyValidation:
         key = auth.generate_api_key("c")
         # Manually set expiry to the past
         key_hash = AuthManager._hash_key(key)
-        auth._keys[key_hash].expires_at = datetime.utcnow() - timedelta(seconds=1)
+        auth._keys[key_hash].expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
         assert auth.validate_api_key(key) is None
 
 

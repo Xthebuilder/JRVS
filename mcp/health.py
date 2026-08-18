@@ -7,7 +7,7 @@ and dependencies.
 
 import asyncio
 from typing import Dict, List, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone, timezone
 from enum import Enum
 from dataclasses import dataclass, asdict
 import logging
@@ -59,16 +59,16 @@ class HealthChecker:
                 component=component,
                 status=HealthStatus.UNKNOWN,
                 message="No health check registered",
-                last_check=datetime.utcnow()
+                last_check=datetime.now(timezone.utc)
             )
 
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
 
         try:
             check_func = self._check_functions[component]
             result = await check_func()
 
-            response_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+            response_time = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
 
             if isinstance(result, ComponentHealth):
                 result.response_time_ms = response_time
@@ -80,7 +80,7 @@ class HealthChecker:
                 component=component,
                 status=HealthStatus.HEALTHY if result else HealthStatus.UNHEALTHY,
                 message="OK" if result else "Check failed",
-                last_check=datetime.utcnow(),
+                last_check=datetime.now(timezone.utc),
                 response_time_ms=response_time
             )
 
@@ -94,8 +94,8 @@ class HealthChecker:
                 component=component,
                 status=HealthStatus.UNHEALTHY,
                 message=f"Error: {str(e)}",
-                last_check=datetime.utcnow(),
-                response_time_ms=(datetime.utcnow() - start_time).total_seconds() * 1000
+                last_check=datetime.now(timezone.utc),
+                response_time_ms=(datetime.now(timezone.utc) - start_time).total_seconds() * 1000
             )
 
             self.checks[component] = health
@@ -136,7 +136,7 @@ class HealthChecker:
 
         return {
             "status": overall_status.value,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "components": {
                 name: check.to_dict()
                 for name, check in self.checks.items()
@@ -168,14 +168,14 @@ async def check_ollama_health() -> ComponentHealth:
                 component="ollama",
                 status=HealthStatus.DEGRADED,
                 message="Connected but no models available",
-                last_check=datetime.utcnow()
+                last_check=datetime.now(timezone.utc)
             )
 
         return ComponentHealth(
             component="ollama",
             status=HealthStatus.HEALTHY,
             message=f"Connected - {len(models)} models available",
-            last_check=datetime.utcnow(),
+            last_check=datetime.now(timezone.utc),
             details={"model_count": len(models), "current_model": ollama_client.current_model}
         )
 
@@ -184,7 +184,7 @@ async def check_ollama_health() -> ComponentHealth:
             component="ollama",
             status=HealthStatus.UNHEALTHY,
             message=f"Connection failed: {str(e)}",
-            last_check=datetime.utcnow()
+            last_check=datetime.now(timezone.utc)
         )
 
 
@@ -200,7 +200,7 @@ async def check_database_health() -> ComponentHealth:
             component="database",
             status=HealthStatus.HEALTHY,
             message="Database operational",
-            last_check=datetime.utcnow(),
+            last_check=datetime.now(timezone.utc),
             details={"path": str(db.db_path) if hasattr(db, 'db_path') else None}
         )
 
@@ -209,7 +209,7 @@ async def check_database_health() -> ComponentHealth:
             component="database",
             status=HealthStatus.UNHEALTHY,
             message=f"Database error: {str(e)}",
-            last_check=datetime.utcnow()
+            last_check=datetime.now(timezone.utc)
         )
 
 
@@ -228,7 +228,7 @@ async def check_rag_health() -> ComponentHealth:
                 component="rag",
                 status=HealthStatus.DEGRADED,
                 message="RAG initialized but no vectors indexed",
-                last_check=datetime.utcnow(),
+                last_check=datetime.now(timezone.utc),
                 details=stats
             )
 
@@ -236,7 +236,7 @@ async def check_rag_health() -> ComponentHealth:
             component="rag",
             status=HealthStatus.HEALTHY,
             message=f"RAG operational - {vector_count} vectors indexed",
-            last_check=datetime.utcnow(),
+            last_check=datetime.now(timezone.utc),
             details=stats
         )
 
@@ -245,7 +245,7 @@ async def check_rag_health() -> ComponentHealth:
             component="rag",
             status=HealthStatus.UNHEALTHY,
             message=f"RAG error: {str(e)}",
-            last_check=datetime.utcnow()
+            last_check=datetime.now(timezone.utc)
         )
 
 
@@ -260,7 +260,7 @@ async def check_calendar_health() -> ComponentHealth:
             component="calendar",
             status=HealthStatus.HEALTHY,
             message="Calendar operational",
-            last_check=datetime.utcnow()
+            last_check=datetime.now(timezone.utc)
         )
 
     except Exception as e:
@@ -268,7 +268,7 @@ async def check_calendar_health() -> ComponentHealth:
             component="calendar",
             status=HealthStatus.UNHEALTHY,
             message=f"Calendar error: {str(e)}",
-            last_check=datetime.utcnow()
+            last_check=datetime.now(timezone.utc)
         )
 
 
@@ -290,7 +290,7 @@ async def check_cache_health() -> ComponentHealth:
             component="cache",
             status=HealthStatus.HEALTHY,
             message=f"Cache operational - {hit_rate:.1f}% hit rate",
-            last_check=datetime.utcnow(),
+            last_check=datetime.now(timezone.utc),
             details={
                 "total_entries": total_size,
                 "hit_rate": round(hit_rate, 2),
@@ -303,7 +303,7 @@ async def check_cache_health() -> ComponentHealth:
             component="cache",
             status=HealthStatus.DEGRADED,
             message=f"Cache error: {str(e)}",
-            last_check=datetime.utcnow()
+            last_check=datetime.now(timezone.utc)
         )
 
 

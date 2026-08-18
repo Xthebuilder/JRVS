@@ -17,6 +17,7 @@ from llm.ollama_client import ollama_client
 from rag.retriever import rag_retriever
 from scraper.web_scraper import web_scraper
 from scraper.brave_search import brave_search
+from guardian_module import guardian_module
 from core.database import db
 from core.file_handler import file_handler, UPLOADS_DIR
 from core.session_store import session_store
@@ -1408,6 +1409,115 @@ class JarvisCLI:
         theme.console.print(f"  Per query   : {status['results_per_query']} results")
         theme.console.print(f"  Auto-scrape : {status['auto_scrape']}")
 
+    def guardian_status(self):
+        """Show Guardian API configuration status."""
+        theme.print_status("Guardian API Status:", "info")
+        theme.console.print(f"  Configured: {'Yes' if guardian_module.configured else 'No (set GUARDIAN_API_KEY)'}")
+        theme.console.print(f"  Base URL  : {guardian_module.base_url}")
+
+    async def guardian_fetch(self, query: str, section: str = "", pages: int = 1, page_size: int = 25):
+        """Fetch from The Guardian API, store to DB, and ingest new items into RAG."""
+        if not guardian_module.configured:
+            theme.print_error("Guardian API key not set. Add GUARDIAN_API_KEY to .env")
+            return
+        theme.print_status("Fetching Guardian articles...", "info")
+        with theme.show_progress("Ingesting Guardian feed...") as progress:
+            task = progress.add_task("", total=None)
+            progress.update(task, description="Calling The Guardian API...")
+            summary = await guardian_module.fetch_and_store(
+                query=query,
+                section=section,
+                page_size=page_size,
+                pages=pages,
+                ingest_to_rag=True,
+            )
+        theme.print_success(
+            f"Guardian sync complete — seen={summary['seen']} new={summary['new']} rag_ingested={summary['rag_ingested']}"
+        )
+
+    async def guardian_search(self, query: str, section: str = ""):
+        """Search locally cached Guardian articles."""
+        if not query.strip():
+            theme.print_error("Usage: /guardian search <query> [--section SECTION]")
+            return
+        rows = await guardian_module.search_articles(query=query, section=section, limit=20)
+        if not rows:
+            theme.print_info("No Guardian articles matched your query.")
+            return
+        theme.print_status(f"Guardian matches ({len(rows)}):", "info")
+        for row in rows:
+            theme.console.print(
+                f"  • [{row.get('section_name', 'Unknown')}] {row.get('web_title', '')}"
+            )
+            if row.get("web_url"):
+                theme.console.print(f"    [dim]{row['web_url']}[/dim]")
+
+    async def guardian_brief(self, days: int = 1, topic: str = ""):
+        """Generate analyst-style briefing with section trends and sentiment."""
+        theme.print_status("Building Guardian analyst brief...", "info")
+        with theme.show_progress("Analyzing coverage...") as progress:
+            task = progress.add_task("", total=None)
+            progress.update(task, description="Computing trends and sentiment...")
+            brief = await guardian_module.analyst_brief(days=days, topic=topic, limit=150)
+
+        theme.print_info(brief.get("summary", ""))
+        sections = brief.get("section_trends", [])
+        if sections:
+            theme.print_status("Top Sections:", "info")
+            for s in sections:
+                theme.console.print(f"  • {s['section']}: {s['count']}")
+        sentiment = brief.get("sentiment", {})
+        theme.print_status("Sentiment Mix:", "info")
+        theme.console.print(
+            f"  +{sentiment.get('positive', 0)}  ~{sentiment.get('neutral', 0)}  -{sentiment.get('negative', 0)}"
+        )
+        keywords = brief.get("top_keywords", [])
+        if keywords:
+            theme.print_status("Top Keywords:", "info")
+            theme.console.print("  " + ", ".join(k["keyword"] for k in keywords[:10]))
+
+    async def guardian_schedule_brief(
+        self,
+        *,
+        cron: str = "0 8 * * *",
+        days: int = 1,
+        topic: str = "",
+    ):
+        """Create a pending scheduled Guardian brief job with report export + Slack link."""
+        if not guardian_module.configured:
+            theme.print_error("Guardian API key not set. Add GUARDIAN_API_KEY to .env")
+            return
+
+        days = max(1, min(days, 30))
+        description = (
+            f"Guardian analyst brief ({days} day window"
+            + (f", topic: {topic}" if topic else "")
+            + ")"
+        )
+        action = json.dumps(
+            {
+                "days": days,
+                "topic": topic,
+                "limit": 150,
+            }
+        )
+        action = f"guardian_brief_report:{action}"
+
+        try:
+            job = await cron_scheduler.create_pending_job(
+                description=description,
+                action=action,
+                cron=cron,
+                human_schedule=cron,
+            )
+        except Exception as exc:
+            theme.print_error(f"Failed to create schedule: {exc}")
+            return
+
+        theme.print_success(f"Guardian brief schedule created as pending: [{job['id']}]")
+        theme.print_info(f"Cron: {cron}")
+        theme.print_info(f"Run '/approve {job['id']}' to activate or '/deny {job['id']}' to discard")
+
     async def websearch_and_answer(self, query: str):
         """Search Brave, inject results as context, and answer in one shot."""
         if not brave_search.is_configured:
@@ -2105,6 +2215,11 @@ class JarvisCLI:
             "/sources": "Show URLs from the most recent web search",
             "/brave-key <key>": "Set your Brave Search API key",
             "/brave-status": "Show Brave Search config and request usage",
+            "/guardian status": "Show Guardian API configuration status",
+            "/guardian fetch [opts] <query>": "Fetch Guardian articles and ingest new ones into RAG",
+            "/guardian search <query>": "Search cached Guardian articles",
+            "/guardian brief [days] [topic]": "Generate analyst-style Guardian briefing",
+            "/guardian schedule [opts]": "Create a pending scheduled Guardian brief with file export + Slack link",
             "/google-auth": "Authenticate with Google (OAuth2)",
             "/google-status": "Show Google Workspace status and sync stats",
             "/google-sync": "Manually sync Gmail + Drive into knowledge base",

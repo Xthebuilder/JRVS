@@ -11,7 +11,7 @@ Tests all major components including:
 
 import pytest
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone, timezone
 import sys
 from pathlib import Path
 
@@ -280,7 +280,7 @@ def test_metrics_collector():
             tool_name="test_tool",
             success=i % 2 == 0,  # 50% success rate
             duration_ms=100 + i * 10,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             error_type="TestError" if i % 2 != 0 else None
         )
         collector.record_request(metrics)
@@ -306,7 +306,7 @@ def test_metrics_tool_breakdown():
                 tool_name=tool,
                 success=True,
                 duration_ms=50,
-                timestamp=datetime.utcnow()
+                timestamp=datetime.now(timezone.utc)
             )
             collector.record_request(metrics)
 
@@ -330,7 +330,7 @@ async def test_health_checker():
             component="test_service",
             status=HealthStatus.HEALTHY,
             message="All good",
-            last_check=datetime.utcnow()
+            last_check=datetime.now(timezone.utc)
         )
 
     # Register an unhealthy check
@@ -339,7 +339,7 @@ async def test_health_checker():
             component="failing_service",
             status=HealthStatus.UNHEALTHY,
             message="Service down",
-            last_check=datetime.utcnow()
+            last_check=datetime.now(timezone.utc)
         )
 
     checker.register_check("test_service", healthy_check)
@@ -394,7 +394,7 @@ async def test_full_request_flow():
         tool_name="test_tool",
         success=True,
         duration_ms=100,
-        timestamp=datetime.utcnow()
+        timestamp=datetime.now(timezone.utc)
     )
     metrics.record_request(request_metrics)
 

@@ -211,7 +211,7 @@ def test_week2_request_validation():
         ("ScrapeRequest model", "class ScrapeRequest(BaseModel):" in content),
         ("CodeExecuteRequest model", "class CodeExecuteRequest(BaseModel):" in content),
         ("Field import", "from pydantic import BaseModel, validator, Field" in content or "Field" in content),
-        ("@validator decorator", "@validator" in content),
+        ("@field_validator decorator", "@field_validator" in content),
         ("URL validation", "validate_url" in content),
         ("Message sanitization", "sanitize_message" in content),
     ]

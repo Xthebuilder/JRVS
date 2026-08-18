@@ -1,23 +1,27 @@
 """
 Unified search backend for the JRVS training pipeline.
 
-Priority:
-  1. Brave Search API  — if BRAVE_API_KEY env var is set (better quality, real index)
-  2. DuckDuckGo        — free fallback, no key needed
+Priority (for synchronous/scripting use):
+  1. Multi-API Search Router — Brave, Exa, Tavily, Serper, SerpAPI with rotation & failover
+  2. Brave Search API  — if BRAVE_API_KEY env var is set (better quality, real index)
+  3. DuckDuckGo        — free fallback, no key needed
 
-Setup Brave (free tier = 2,000 queries/month):
-  1. https://brave.com/search/api/  → sign up → get API key
-  2. export BRAVE_API_KEY="your_key_here"
-     # or add to ~/.bashrc / ~/.profile to make permanent
+Setup APIs:
+  Brave:   https://search.brave.com/
+  Exa:     https://exa.ai/
+  Tavily:  https://app.tavily.com/home
+  Serper:  https://serper.dev/dashboard
+  SerpAPI: https://serpapi.com/dashboard
 
 Usage:
-  from search_utils import search
+  from search_utils import search, search_backend
   results = search("latest Ollama updates", max_results=4)
   # returns formatted string of results with source names
 """
 
 import os
 import requests
+import asyncio
 try:
     from ddgs import DDGS
 except ImportError:
@@ -30,15 +34,67 @@ BRAVE_URL     = "https://api.search.brave.com/res/v1/web/search"
 def search(query: str, max_results: int = 4) -> str:
     """
     Search the web and return formatted results string.
-    Uses Brave if BRAVE_API_KEY is set, otherwise DuckDuckGo.
+    Uses multi-API router if configured, then Brave, then DuckDuckGo.
     """
+    # Try multi-API search router (async)
+    try:
+        result = asyncio.run(_search_with_router(query, max_results))
+        if result and "Error" not in result:
+            return result
+    except Exception as e:
+        pass  # Fall through to next option
+    
+    # Fall back to Brave if configured
     if BRAVE_API_KEY:
-        return _brave_search(query, max_results)
+        result = _brave_search(query, max_results)
+        if result and "Falling back" not in result:
+            return result
+    
+    # Ultimate fallback: DuckDuckGo
     return _ddg_search(query, max_results)
 
 
+async def _search_with_router(query: str, max_results: int) -> str:
+    """Use the multi-API search router for async searches"""
+    try:
+        from scraper.search_router import search_router
+        
+        result = await search_router.search(query)
+        if result.get("error"):
+            return None
+        
+        results = result.get("results", [])[:max_results]
+        if not results:
+            return None
+        
+        parts = []
+        for i, res in enumerate(results, 1):
+            title       = res.get("title", "")
+            description = res.get("description", "")
+            url         = res.get("url", "")
+            source      = url.split("/")[2].replace("www.", "") if url else "Unknown"
+            provider    = result.get("provider", "multi-api")
+            parts.append(f"[{i}] {title} (Source: {source}, via {provider})\n{description}")
+        
+        return "\n\n".join(parts)
+    except Exception as e:
+        return None
+
+
 def search_backend() -> str:
-    return "Brave Search" if BRAVE_API_KEY else "DuckDuckGo"
+    """Return current search backend being used"""
+    try:
+        from scraper.search_router import search_router
+        enabled = search_router.enabled_providers
+        if enabled:
+            providers = ", ".join([p.value for p in enabled])
+            return f"Multi-API Router ({providers})"
+    except:
+        pass
+    
+    if BRAVE_API_KEY:
+        return "Brave Search"
+    return "DuckDuckGo"
 
 
 def _brave_search(query: str, max_results: int) -> str:

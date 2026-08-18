@@ -33,7 +33,7 @@ log = logging.getLogger("jarvis.autonomous_research")
 
 # ── Configuration ────────────────────────────────────────────────────────────
 RESEARCH_OS_DIR = Path(
-    os.environ.get("RESEARCH_OS_DIR", "/home/xavier/Desktop/reddit-research")
+    os.environ.get("RESEARCH_OS_DIR", "/absolute/path/to/reddit-research")
 )
 HEADLESS_SCRIPT = RESEARCH_OS_DIR / "headless.py"
 RESEARCH_OS_PYTHON = Path(

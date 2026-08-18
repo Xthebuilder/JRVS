@@ -7,7 +7,7 @@ Uses async mock check functions — no external services.
 
 import sys
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone, timezone
 
 import pytest
 
@@ -21,7 +21,7 @@ def _make_health(status=HealthStatus.HEALTHY, component="test", message="ok"):
         component=component,
         status=status,
         message=message,
-        last_check=datetime.utcnow(),
+        last_check=datetime.now(timezone.utc),
     )
 
 
