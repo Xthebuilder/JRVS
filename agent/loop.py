@@ -35,6 +35,9 @@ from agent.approvals import ApprovalCoordinator
 from agent.scheduling import next_ready_batch
 from agent.tool_registry import tool_registry, CONFIRM, NOTIFY, AUTO, BLOCKED, max_tier
 from agent.verification import verify_action, VERIFIED, FAILED, UNVERIFIED
+from agent.capabilities import describe_for_prompt, unavailable_prefixes
+from agent.lessons import format_for_prompt as _lessons_for_prompt, record_goal_gap, record_tool_error
+from agent.prechecks import find_existing
 from agent.goal_check import (
     check_goal_satisfied, format_evidence, SATISFIED, GAP, INDETERMINATE,
 )
@@ -60,6 +63,10 @@ Break the user's goal into an ordered list of tool calls.
 
 Available tools (name [TIER] — description):
 {catalogue}
+
+{capabilities}
+
+{lessons}
 
 TIER meanings:
   AUTO    — safe to execute silently (reads, searches)
@@ -250,9 +257,19 @@ class AgentLoop:
             return GoalResult(goal_id=goal_id, run_id=run_id, status="failed", error=str(exc))
 
         if not plan:
-            await self._mark_failed(goal_id, "Planner returned no steps")
-            return GoalResult(goal_id=goal_id, run_id=run_id, status="failed",
-                              error="Planner returned no steps")
+            blocked = describe_for_prompt()
+            if blocked:
+                # The planner was told to return nothing rather than substitute a
+                # different kind of action, so report the boundary honestly.
+                names = ", ".join(
+                    c.name for c in __import__("agent.capabilities", fromlist=["get_capabilities"])
+                    .get_capabilities() if not c.available
+                )
+                reason = f"I can't do that right now — {names} is unavailable. {blocked.splitlines()[1].strip()}"
+            else:
+                reason = "Planner returned no steps"
+            await self._mark_failed(goal_id, reason)
+            return GoalResult(goal_id=goal_id, run_id=run_id, status="failed", error=reason)
 
         await self._db.upsert_goal_state(goal_id, {
             "status": "running",
@@ -283,6 +300,7 @@ class AgentLoop:
                     "AgentLoop[%s]: goal '%s' ran but does not satisfy the request (%s): %s",
                     self._role, goal_id, verdict, missing,
                 )
+                record_goal_gap(request, missing)
                 if attempt >= self._goal_check_attempts:
                     result.status = "failed"
                     result.error = f"completed steps but did not fulfil the request: {missing}"
@@ -315,7 +333,9 @@ class AgentLoop:
         """Build a corrective plan aimed only at the part still unfulfilled."""
         exclude = self._effective_exclude_prefixes()
         catalogue = tool_registry.catalogue_for_prompt(exclude=exclude or None)
-        system = _PLANNER_SYSTEM.format(catalogue=catalogue, today=_now_str())
+        system = _PLANNER_SYSTEM.format(catalogue=catalogue, today=_now_str(),
+                                       capabilities=describe_for_prompt(),
+                                       lessons=_lessons_for_prompt())
         user_msg = (
             f"Original request: {request}\n\n"
             f"The previous attempt ran but did NOT fulfil it. What is still wrong:\n{missing}\n\n"
@@ -347,11 +367,9 @@ class AgentLoop:
     @staticmethod
     def _unavailable_tool_prefixes() -> "set[str]":
         """Return tool name prefixes that should be hidden when not configured."""
-        from pathlib import Path as _Path
-        creds = _Path.home() / "JRVS" / "google_credentials.json"
-        if not creds.exists():
-            return {"gmail_", "docs_", "sheets_", "calendar_"}
-        return set()
+        # Delegated to agent/capabilities.py so the same probe drives both the
+        # catalogue exclusion and the explanation the planner is given.
+        return unavailable_prefixes()
 
     def _effective_exclude_prefixes(self) -> "set[str]":
         """Merge credential-based exclusion with this engine's role scope, if any."""
@@ -381,7 +399,9 @@ class AgentLoop:
             memory_block = "Memory from previous runs:\n" + \
                 "\n".join(f"  {k}: {v}" for k, v in list(memory.items())[:10]) + "\n\n"
 
-        system = _PLANNER_SYSTEM.format(catalogue=catalogue, today=_now_str())
+        system = _PLANNER_SYSTEM.format(catalogue=catalogue, today=_now_str(),
+                                       capabilities=describe_for_prompt(),
+                                       lessons=_lessons_for_prompt())
         user_msg = (
             f"{memory_block}"
             f"Goal: {goal_text}\n\n"
@@ -406,7 +426,9 @@ class AgentLoop:
         exclude = self._effective_exclude_prefixes()
         catalogue = tool_registry.catalogue_for_prompt(exclude=exclude or None)
         remaining_json = json.dumps([_step_to_dict(s) for s in remaining], indent=2)
-        system = _PLANNER_SYSTEM.format(catalogue=catalogue, today=_now_str())
+        system = _PLANNER_SYSTEM.format(catalogue=catalogue, today=_now_str(),
+                                       capabilities=describe_for_prompt(),
+                                       lessons=_lessons_for_prompt())
         user_msg = (
             f"Goal: {goal_text}\n\n"
             f"Step {failed_step.step} ({failed_step.tool}) failed with error: {error}\n\n"
@@ -444,6 +466,7 @@ class AgentLoop:
         steps_failed = 0
         remaining = list(plan)
         retry_count = 0
+        adapted = False   # one mid-plan adaptation per run, so it cannot ping-pong
 
         while remaining:
             # Find the next batch of steps whose dependencies are satisfied
@@ -489,9 +512,35 @@ class AgentLoop:
                     steps_ok += 1
                     await self._db.upsert_goal_state(goal_id, {"step_cursor": step.step})
 
+                    # Adapt to information, not just to errors. A step can
+                    # succeed and still invalidate the rest of the plan — the
+                    # clearest case being a write that turned out to be
+                    # unnecessary because the record already existed, leaving
+                    # later steps aimed at something that never got created.
+                    if outcome.get("skipped_existing") and not adapted:
+                        still_to_do = [t for t in plan
+                                       if t.step not in step_results and t is not step]
+                        if still_to_do:
+                            adapted = True
+                            log.info(
+                                "AgentLoop[%s]: step %d found the record already present — "
+                                "re-planning the %d remaining step(s)",
+                                self._role, step.step, len(still_to_do),
+                            )
+                            revised = await self._replan(
+                                goal_text, step,
+                                "this record already existed, so the write was skipped — "
+                                "revise the remaining steps for that reality, and drop any "
+                                "that are now unnecessary",
+                                still_to_do, backend,
+                            )
+                            remaining = revised
+                            break
+
                 elif status == "error":
                     err = outcome.get("error", "unknown error")
                     steps_failed += 1
+                    record_tool_error(step.tool, err)
                     log.warning(
                         "AgentLoop[%s]: step %d (%s) failed: %s — replanning (attempt %d/%d)",
                         self._role, step.step, step.tool, err, retry_count + 1, self._max_retries,
@@ -558,6 +607,19 @@ class AgentLoop:
 
         # AUTO or NOTIFY — execute immediately
         try:
+            # Look before writing. Retried steps and re-run goals would otherwise
+            # each create another copy; converge on the existing record instead.
+            existing = await find_existing(step.tool, args)
+            if existing is not None:
+                log.info(
+                    "AgentLoop: step %d (%s) — already present, skipping the write",
+                    step.step, step.tool,
+                )
+                return {
+                    "status": "success", "result": existing,
+                    "verification": VERIFIED, "skipped_existing": True,
+                }
+
             result = await tool_registry.call(step.tool, args)
 
             # Tools report expected failures by returning {"error": ...} rather
