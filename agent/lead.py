@@ -28,6 +28,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from agent.approvals import ApprovalCoordinator, init_approval_coordinator
+from agent.goal_check import check_goal_satisfied, SATISFIED
 from agent.loop import AgentLoop, GoalResult, _notify_slack, _truncate, _planner_model
 from agent.roles import ROLES, role_catalogue_for_prompt, tools_for_role
 from agent.scheduling import next_ready_batch
@@ -170,7 +171,13 @@ class LeadAgent:
             only = subtasks[0]
             await self._db.upsert_goal_state(goal_id, {"mode": "flat"})
             engine = self._role_engines.get(only.role, self._role_engines["ops"])
-            return await engine.run_goal(goal_id, only.instruction, backend)
+            # Pass the user's ORIGINAL wording alongside the rewritten
+            # instruction. Decomposition is lossy — "tomorrow at 6pm" came back
+            # as "create an all-day event" — so the outcome has to be audited
+            # against what the user actually said, not against the paraphrase.
+            return await engine.run_goal(
+                goal_id, only.instruction, backend, original_request=goal_text,
+            )
 
         run_id = str(uuid.uuid4())
         log.info(
@@ -186,7 +193,34 @@ class LeadAgent:
         })
         await self._db.upsert_goal_state(goal_id, {"status": "running"})
 
-        return await self._dispatch(goal_id, run_id, subtasks, goal_text, backend)
+        result = await self._dispatch(goal_id, run_id, subtasks, goal_text, backend)
+
+        # Audit the WHOLE goal here rather than inside each subtask: a subtask is
+        # only ever part of the request, so checking one against the full request
+        # would always report a gap. This is the multi-subtask equivalent of the
+        # outer loop AgentLoop runs for single-subtask goals.
+        if result.status == "completed":
+            evidence = "\n".join(
+                f"- subtask {s.subtask} [{s.role}]: {s.instruction}" for s in subtasks
+            )
+            verdict, missing = await check_goal_satisfied(
+                goal_text, evidence, backend, planner_kwargs=_planner_model(),
+            )
+            if verdict != SATISFIED:
+                log.warning(
+                    "LeadAgent: goal '%s' ran but does not satisfy the request (%s): %s",
+                    goal_id, verdict, missing,
+                )
+                result.status = "failed"
+                result.error = f"completed subtasks but did not fulfil the request: {missing}"
+                await self._db.upsert_goal_state(
+                    goal_id, {"status": "failed", "last_error": result.error[:500]},
+                )
+                await _notify_slack(
+                    f":warning: *Goal ran but did not fulfil the request* — `{goal_id}`\n{missing}",
+                    channel_key="alerts",
+                )
+        return result
 
     async def handle_approval(self, action_id: str, approved: bool) -> None:
         """Called by SlackListener when the user taps Approve or Deny."""

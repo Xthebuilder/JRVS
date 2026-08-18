@@ -35,12 +35,16 @@ from agent.approvals import ApprovalCoordinator
 from agent.scheduling import next_ready_batch
 from agent.tool_registry import tool_registry, CONFIRM, NOTIFY, AUTO, BLOCKED, max_tier
 from agent.verification import verify_action, VERIFIED, FAILED, UNVERIFIED
+from agent.goal_check import (
+    check_goal_satisfied, format_evidence, SATISFIED, GAP, INDETERMINATE,
+)
 from llm.protocol import LLMBackend
 
 log = logging.getLogger(__name__)
 
 MAX_PARALLEL = 5
 MAX_RETRIES  = 3
+GOAL_CHECK_ATTEMPTS = 2
 
 _PLANNER_SYSTEM = """\
 You are JARVIS, an autonomous AI assistant.
@@ -154,6 +158,9 @@ class GoalResult:
     steps_failed: int = 0
     error: str = ""
     step_results: dict = field(default_factory=dict)
+    # Per-step {status, verification}. step_results holds each tool's raw return
+    # value (often a list), so the audit needs execution status kept separately.
+    step_outcomes: dict = field(default_factory=dict)
 
 
 # ── Main class ────────────────────────────────────────────────────────────────
@@ -169,6 +176,7 @@ class AgentLoop:
         allowed_tools: Optional["set[str]"] = None,
         approvals: Optional[ApprovalCoordinator] = None,
         max_retries: int = MAX_RETRIES,
+        goal_check_attempts: int = GOAL_CHECK_ATTEMPTS,
     ) -> None:
         """
         Parameters
@@ -203,6 +211,10 @@ class AgentLoop:
         self._allowed_tools = allowed_tools
         self._max_retries = max_retries
         self._approvals = approvals or ApprovalCoordinator(db)
+        # How many times the outcome may be audited-and-corrected before the
+        # goal is reported unfulfilled. Bounded so a request the tools simply
+        # cannot satisfy fails loudly instead of looping.
+        self._goal_check_attempts = goal_check_attempts
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -211,6 +223,7 @@ class AgentLoop:
         goal_id: str,
         goal_text: str,
         backend: LLMBackend,
+        original_request: Optional[str] = None,
     ) -> GoalResult:
         """
         Main entry point. Called by GoalScheduler and event trigger handlers.
@@ -249,6 +262,47 @@ class AgentLoop:
 
         result = await self._execute_plan(goal_id, run_id, plan, goal_text, backend)
 
+        # ── Outer loop ────────────────────────────────────────────────────────
+        # Per-step verification proves each tool did what it was TOLD. It cannot
+        # catch a plan that was confidently wrong: asked for 6pm, a planner that
+        # chose an all-day event gets an all-day event verified clean. So audit
+        # the outcome against the user's own words and, on a gap, replan with
+        # the specific unmet part and run again.
+        request = (original_request or goal_text or "").strip()
+        if result.status == "completed" and request:
+            for attempt in range(1, self._goal_check_attempts + 1):
+                evidence = format_evidence(result.step_outcomes, plan)
+                verdict, missing = await check_goal_satisfied(
+                    request, evidence, backend, planner_kwargs=_planner_model(),
+                )
+                if verdict == SATISFIED:
+                    log.info("AgentLoop[%s]: goal '%s' satisfies the request", self._role, goal_id)
+                    break
+
+                log.warning(
+                    "AgentLoop[%s]: goal '%s' ran but does not satisfy the request (%s): %s",
+                    self._role, goal_id, verdict, missing,
+                )
+                if attempt >= self._goal_check_attempts:
+                    result.status = "failed"
+                    result.error = f"completed steps but did not fulfil the request: {missing}"
+                    await self._mark_failed(goal_id, result.error)
+                    await _notify_slack(
+                        f":warning: *Goal ran but did not fulfil the request* — `{goal_id}`\n{missing}",
+                        channel_key="alerts",
+                    )
+                    return result
+
+                plan = await self._replan_for_gap(request, missing, backend)
+                if not plan:
+                    result.status = "failed"
+                    result.error = f"did not fulfil the request and could not replan: {missing}"
+                    await self._mark_failed(goal_id, result.error)
+                    return result
+                result = await self._execute_plan(goal_id, run_id, plan, request, backend)
+                if result.status != "completed":
+                    break
+
         if result.status == "completed":
             await self._db.upsert_goal_state(goal_id, {"status": "completed"})
             log.info("AgentLoop[%s]: goal '%s' completed (%d steps)", self._role, goal_id, result.steps_ok)
@@ -256,6 +310,28 @@ class AgentLoop:
             await self._mark_failed(goal_id, result.error)
 
         return result
+
+    async def _replan_for_gap(self, request: str, missing: str, backend: LLMBackend) -> list:
+        """Build a corrective plan aimed only at the part still unfulfilled."""
+        exclude = self._effective_exclude_prefixes()
+        catalogue = tool_registry.catalogue_for_prompt(exclude=exclude or None)
+        system = _PLANNER_SYSTEM.format(catalogue=catalogue, today=_now_str())
+        user_msg = (
+            f"Original request: {request}\n\n"
+            f"The previous attempt ran but did NOT fulfil it. What is still wrong:\n{missing}\n\n"
+            "Plan the steps that actually fulfil the original request. If a wrong "
+            "record was already created, correct or replace it rather than adding "
+            "a duplicate. Return the JSON array only."
+        )
+        try:
+            raw = await backend.chat(messages=[
+                {"role": "system", "content": system},
+                {"role": "user",   "content": user_msg},
+            ], **_planner_model())
+            return _parse_plan(raw, allowed_names=self._allowed_tools)
+        except Exception as exc:
+            log.error("AgentLoop: corrective replan failed: %s", exc)
+            return []
 
     async def handle_approval(self, action_id: str, approved: bool) -> None:
         """
@@ -363,6 +439,7 @@ class AgentLoop:
         (same dependency frontier) run concurrently up to MAX_PARALLEL.
         """
         step_results: dict[int, Any] = {}
+        step_outcomes: dict[int, dict] = {}
         steps_ok = 0
         steps_failed = 0
         remaining = list(plan)
@@ -401,6 +478,11 @@ class AgentLoop:
                         status="awaiting_approval",
                         steps_ok=steps_ok, steps_failed=steps_failed,
                     )
+
+                step_outcomes[step.step] = {
+                    "status": status,
+                    "verification": outcome.get("verification", "n/a"),
+                }
 
                 if status in ("success", "verified"):
                     step_results[step.step] = outcome.get("result")
@@ -442,7 +524,7 @@ class AgentLoop:
         return GoalResult(
             goal_id=goal_id, run_id=run_id, status="completed",
             steps_ok=steps_ok, steps_failed=steps_failed,
-            step_results=step_results,
+            step_results=step_results, step_outcomes=step_outcomes,
         )
 
     async def _execute_step(
@@ -685,10 +767,23 @@ def _resolve_args(args: dict[str, Any], step_results: dict[int, Any]) -> dict[st
             return json.dumps(raw, ensure_ascii=False)
         return str(raw)
 
+    # Anything still looking like a placeholder after substitution never got
+    # resolved — most often the planner copied the literal example
+    # "<result_from_step_N>" out of the prompt, which the numeric pattern above
+    # does not match. Writing that through created calendar events actually
+    # titled "<result_from_step_N>". Fail the step instead so it replans.
+    _UNRESOLVED = re.compile(r"result[_\s]*from[_\s]*step", re.IGNORECASE)
+
     resolved = {}
     for k, v in args.items():
         if isinstance(v, str):
             v = _PLACEHOLDER.sub(_sub, v)
+            if _UNRESOLVED.search(v):
+                raise ValueError(
+                    f"argument {k!r} still contains an unresolved step placeholder "
+                    f"({v[:60]!r}) — reference a real step number, or put the literal "
+                    f"value in directly"
+                )
         resolved[k] = v
     return resolved
 
